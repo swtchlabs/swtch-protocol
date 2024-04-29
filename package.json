@@ -1,0 +1,20 @@
+{
+  "name": "swtch-protocol",
+  "version": "1.0.0",
+  "description": "SWTCH Protocol ",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "astor@swtch.network",
+  "license": "ISC",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@types/chai": "^4.3.14",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.12.6",
+    "chai": "^4.4.1",
+    "ethers": "^6.11.1",
+    "hardhat": "^2.22.3"
+  }
+}
