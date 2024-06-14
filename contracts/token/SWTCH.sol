@@ -30,7 +30,6 @@ contract SWTCH is Initializable, ERC20Upgradeable, OwnableUpgradeable {
         __Ownable_init(admin);
         
         _mint(admin, initialSupply);
-        // transferOwnership(admin);
     }
 
     /**
