@@ -7,7 +7,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 /**
- * @title Astor Rivera
+ * @title IdentityManager
  * @author astor@swtch.network
  * @notice Decentralized Identifier (DID) Manager that can issue, manage, and verify decentralized identities. The DID concept is a core component of decentralized identity frameworks, where a DID uniquely represents an entity (e.g., person, organization, device) and is controlled by the entity itself rather than a central authority. 
  */
