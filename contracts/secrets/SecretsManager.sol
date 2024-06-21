@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.24;
 
+import "../id/IdentityManager.sol";
 import "./SecretsSpace.sol";
 
 /**
@@ -12,6 +13,7 @@ contract SecretsManager {
     
     address immutable public owner;
     uint256 private _fee;
+    IdentityManager private didRegistry; // Reference to the DID registry
 
     struct Space {
         address owner;
@@ -25,65 +27,67 @@ contract SecretsManager {
     event SpaceAdded(address indexed owner, address indexed deployed);
     event SubSpaceAdded(address indexed owner, address indexed subOwner, address indexed deployed);
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner may perform this action");
+    modifier onlyDIDOwner(address did) {
+        require(didRegistry.isOwnerOrDelegate(did, msg.sender), "Only DID owner can perform this action");
         _;
     }
 
     /**
      * @dev Constructor
      * @param fee_ Cost associated with storage of each individual secret key,value pair.
+     * @param didRegistryAddress_ IdentityManager reference.
      */
-    constructor(uint256 fee_) {
+    constructor(uint256 fee_, address didRegistryAddress_) {
         owner = msg.sender;
         _fee = fee_;
+        didRegistry = IdentityManager(didRegistryAddress_); // Initialize with DID Registry address
     }
 
     function getFee() external view returns (uint256) {
         return _fee;
     }
- 
-    function getSubSpaces(address user) public view returns (address[] memory) {
-      return subspaces[user];
+
+    function getSpace(address userDID) public view returns (address) {
+        return spaces[userDID].deployed;
     }
-    
-    
-    function addSpace(address user) external onlyOwner {
-        require(spaces[user].deployed == address(0), "Space already exists for this user");
+ 
+    function getSubSpaces(address userDID) public view returns (address[] memory) {
+      return subspaces[userDID];
+    }
 
-        SecretsSpace newSpace = new SecretsSpace(_fee); // Assuming no parameters in constructor
+    function addSpace(address userDID) external onlyDIDOwner(userDID) {
+        require(spaces[userDID].deployed == address(0), "Space already exists for this user");
+        SecretsSpace newSpace = new SecretsSpace(_fee);
         address deployedAddress = address(newSpace);
-
-        spaces[user] = Space({
-            owner: user,
+        spaces[userDID] = Space({
+            owner: userDID,
             deployed: deployedAddress,
             enabled: true
         });
-
-        emit SpaceAdded(user, deployedAddress);
+        emit SpaceAdded(userDID, deployedAddress);
     }
 
-    function addSubSpace(address user, address subUser) external onlyOwner {
-        require(spaces[user].enabled, "Parent space is not enabled.");
-        require(spaces[subUser].deployed == address(0), "Subspace already exists for this sub-user");
+    function addSubSpace(address userDID, address subUserDID) external onlyDIDOwner(userDID) {
+        require(spaces[userDID].enabled, "Parent space is not enabled.");
+        require(spaces[subUserDID].deployed == address(0), "Subspace already exists for this sub-user");
 
         SecretsSpace newSubSpace = new SecretsSpace(_fee); 
         address deployedSubSpace = address(newSubSpace);
 
-        spaces[subUser] = Space({
-            owner: subUser,
+        spaces[subUserDID] = Space({
+            owner: subUserDID,
             deployed: deployedSubSpace,
             enabled: true
         });
 
-        subspaces[user].push(deployedSubSpace);
+        subspaces[userDID].push(deployedSubSpace);
 
-        emit SubSpaceAdded(user, subUser, deployedSubSpace);
+        emit SubSpaceAdded(userDID, subUserDID, deployedSubSpace);
     }
 
-    function disableSpace(address user) external onlyOwner {
-        require(spaces[user].deployed != address(0), "No space deployed for this user.");
-        spaces[user].enabled = false;
+    function disableSpace(address userDID) external onlyDIDOwner(userDID) {
+        require(spaces[userDID].deployed != address(0), "No space deployed for this user.");
+        spaces[userDID].enabled = false;
         // TODO Consider what to do with subspaces if any, are they also disabled.
         // Possibly add a flag to disable sub spaces
     }

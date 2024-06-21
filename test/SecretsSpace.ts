@@ -1,31 +1,28 @@
-import {
-    time,
-    loadFixture,
-  } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect, assert } from "chai";
 import hre from "hardhat";
-import { SecretsSpace } from "../typechain-types";
+import { SecretsSpace, SecretsSpace__factory } from "../typechain-types";
 
 describe("Secrets Space", async function() {
 
     let secretsSpace: SecretsSpace;
     let owner: any;
     let addr1: any;
+    let addr2: any;
     let addrs;
 
     // test secret fee
     const ONE_GWEI = 1_000_000_000;
     const SECRET_FEE = hre.ethers.WeiPerEther;
     const EXCESS_FEE = hre.ethers.toBigInt(SECRET_FEE) + hre.ethers.toBigInt(SECRET_FEE);
-    const ADJUSTED_FEES = hre.ethers.toBigInt(hre.ethers.WeiPerEther) + hre.ethers.toBigInt(ONE_GWEI);
+    // const ADJUSTED_FEES = hre.ethers.toBigInt(hre.ethers.WeiPerEther) + hre.ethers.toBigInt(ONE_GWEI);
+    const ADJUSTED_FEES = hre.ethers.parseEther("1.1");
       
     beforeEach(async function () {
       // Get the signers
       [owner, addr1, ...addrs] = await hre.ethers.getSigners();
 
       // Deploy the contract
-      const SecretsSpaceFactory = await hre.ethers.getContractFactory("SecretsSpace", owner);
+      const SecretsSpaceFactory = await hre.ethers.getContractFactory("SecretsSpace", owner) as SecretsSpace__factory;
       secretsSpace = await SecretsSpaceFactory.deploy(SECRET_FEE);
       await secretsSpace.getDeployedCode();
     });
@@ -43,24 +40,22 @@ describe("Secrets Space", async function() {
     // Fees
     describe("Fees", async function () {
       // Owner withdraw fees only
-      it("should only allow the owner to withdraw fees", async () => {
-        try {
-          await secretsSpace.withdrawFees({ from: addr1 });
-          assert.fail("The withdrawal did not fail as expected");
-        } catch (error:any) {
-          assert(error.message.includes("code=INVALID_ARGUMENT"), "Expected revert not found");
-        }
-      });
+      it("should only allow the owner to withdraw fees", async function () {
+        // Assuming owner can deposit into the contract for this test
+        var enc = new TextEncoder();
+        const identifier = hre.ethers.hexlify(enc.encode("randomTestKey"));
+        const secretValue = hre.ethers.hexlify(enc.encode("064132ec8ab78f51d2e3c3c8e7adece155b56103ea0be3e9872e9bf7b5f7ab7a"));
+        const result = await secretsSpace.connect(addr1).addSecret(identifier, secretValue, {
+          value: SECRET_FEE,
+        });
 
-      // Owner fee withdrawal
-      it("should allow the owner to withdraw fees", async () => {
-        const contractBalanceBefore = await hre.ethers.provider.getBalance(secretsSpace.getAddress());
+        // Attempt by non-owner should fail
+        await expect(secretsSpace.connect(addr1).withdrawFees(addr1.address, SECRET_FEE))
+            .to.be.revertedWith("Requires ADMIN_ROLE");
 
-        if (contractBalanceBefore > 0) {
-          await secretsSpace.withdrawFees({ from: owner });
-        }
-        const contractBalanceAfter = await hre.ethers.provider.getBalance(secretsSpace.getAddress());
-        assert.equal(contractBalanceAfter, hre.ethers.toBigInt(0), "Contract balance should be 0 after withdrawal");
+        // Withdraw by owner should succeed
+        await expect(() => secretsSpace.withdrawFees(owner.address, SECRET_FEE))
+            .to.changeEtherBalances([secretsSpace, owner], [-SECRET_FEE, SECRET_FEE]);
       });
 
       // Fee collection test
@@ -88,6 +83,24 @@ describe("Secrets Space", async function() {
       });
     });
 
+    describe("Access Control", function () {
+      it("Should allow owner to grant admin role", async function () {
+          await secretsSpace.grantRole(await secretsSpace.ADMIN_ROLE(), addr1.address);
+          expect(await secretsSpace.hasRole(await secretsSpace.ADMIN_ROLE(), addr1.address)).to.be.true;
+      });
+
+      it("Should restrict fee adjustment to admins", async function () {
+          await expect(secretsSpace.connect(addr1).adjustFees(ADJUSTED_FEES))
+              .to.be.revertedWith("Requires ADMIN_ROLE");
+      });
+
+      it("Should allow admin to adjust fees", async function () {
+          await secretsSpace.grantRole(await secretsSpace.ADMIN_ROLE(), addr1.address);
+          await secretsSpace.connect(addr1).adjustFees(ADJUSTED_FEES);
+          expect(await secretsSpace.getFee()).to.equal(ADJUSTED_FEES);
+      });
+    });
+
     // Refunds
     describe("Refunds", async function() {
       it("should refund excess fee when adding a secret", async function() {
@@ -109,6 +122,35 @@ describe("Secrets Space", async function() {
         assert(finalBalance + gasUsed >= initialBalance - EXCESS_FEE, "Balance after refund is incorrect");
         
       });
+
+      it("Should correctly handle fee payments and refunds", async function () {
+        var enc = new TextEncoder();
+        const identifier = hre.ethers.hexlify(enc.encode("testKey"));
+        const secretValue = hre.ethers.randomBytes(32);
+        await expect(await secretsSpace.addSecret(identifier, secretValue, { value: EXCESS_FEE }))
+            .to.changeEtherBalances([secretsSpace, owner], [SECRET_FEE, -SECRET_FEE]);
+
+        // Check refund
+        const balanceAfter = await secretsSpace.feesCollected(); 
+        expect(balanceAfter).to.be.closeTo(SECRET_FEE, hre.ethers.parseEther("0.1")); 
+      });
+    });
+
+    describe("Delegate Authorization", function () {
+      it("Should allow owner to authorize a delegate", async function () {
+        var enc = new TextEncoder();
+        const identifier = hre.ethers.hexlify(enc.encode("key1"));
+        await secretsSpace.authorizeDelegate(addr1.address, identifier);
+        expect(await secretsSpace.delegatePermissions(addr1.address, identifier)).to.be.true;
+      });
+
+      it("Should allow owner to revoke delegate authorization", async function () {
+        var enc = new TextEncoder();
+        const identifier = hre.ethers.hexlify(enc.encode("key1"));
+        await secretsSpace.authorizeDelegate(addr1.address, identifier);
+        await secretsSpace.revokeDelegate(addr1.address, identifier);
+        expect(await secretsSpace.delegatePermissions(addr1.address, identifier)).to.be.false;
+      });
     });
 
     // Add Secret event emission test
@@ -122,17 +164,32 @@ describe("Secrets Space", async function() {
           .to.emit(secretsSpace, "SecretAdded")
           .withArgs(identifier);
       });
+
+      it("Should emit events for delegate actions", async function () {
+        var enc = new TextEncoder();
+        const identifier = hre.ethers.hexlify(enc.encode("key3"))
+        await expect(secretsSpace.authorizeDelegate(addr1.address, identifier))
+            .to.emit(secretsSpace, "DelegateAuthorized")
+            .withArgs(addr1.address, identifier);
+
+        await expect(secretsSpace.revokeDelegate(addr1.address, identifier))
+            .to.emit(secretsSpace, "DelegateRevoked")
+            .withArgs(addr1.address, identifier);
+    });
     });
 
     describe("Ownership", function () {
-      it("should only allow the owner to perform restricted actions", async () => {
-        // Attempt to perform a restricted action as a non-owner
-        try {
-          await secretsSpace.connect(addr1).withdrawFees();
-          assert.fail("The withdrawal did not fail as expected");
-        } catch (error:any) {
-          assert(error.message.includes("revert"), "Expected revert not found");
-        }
+      it("should only allow the owner to perform restricted actions", async function () {
+        // Admin role should be able to adjust fees
+        await secretsSpace.grantRole(await secretsSpace.ADMIN_ROLE(), addr1.address);
+
+        // addr1 can now adjust fees as an admin
+        await expect(secretsSpace.connect(addr1).adjustFees(ADJUSTED_FEES))
+            .not.to.be.reverted;
+
+        // Owner can also adjust fees directly
+        await expect(secretsSpace.adjustFees(ADJUSTED_FEES))
+            .not.to.be.reverted;
       });
     });
 });
