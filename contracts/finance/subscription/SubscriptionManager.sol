@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3
 pragma solidity ^0.8.24;
 
+import "../../id/IdentityManager.sol";
 import "../../access/RoleBasedAccessControl.sol";
 
 /**
@@ -9,6 +10,9 @@ import "../../access/RoleBasedAccessControl.sol";
  * @notice SubscriptionManager manages native cryptocurrency based subscription fees.
  */
 contract SubscriptionManager is RoleBasedAccessControl {
+
+    IdentityManager public identityManager;
+
     uint256 public subscriptionFee;
     uint256 public subscriptionDuration; // in seconds, e.g., 30 days
 
@@ -29,11 +33,18 @@ contract SubscriptionManager is RoleBasedAccessControl {
     event PlanAdded(uint256 planId, uint256 price);
     event PlanUpdated(uint256 planId, uint256 newPrice);
 
-    constructor(uint256 _fee, uint256 _duration) 
+    modifier onlyDIDOwner(address did) {
+        require(identityManager.isOwnerOrDelegate(did, msg.sender), "Unauthorized: caller is not the owner or delegate");
+        _;
+    }
+
+    constructor(uint256 _fee, uint256 _duration, address _identityManager) 
       RoleBasedAccessControl() 
     {
         subscriptionFee = _fee;
         subscriptionDuration = _duration;
+
+        identityManager = IdentityManager(_identityManager);
     }
     
     function addPlan(uint256 planId, uint256 price) external onlyOwner {
@@ -46,32 +57,24 @@ contract SubscriptionManager is RoleBasedAccessControl {
         emit PlanUpdated(planId, newPrice);
     }
 
-    function subscribe(uint256 planId) public payable {
+    function subscribe(address userDID, uint256 planId) public payable onlyDIDOwner(userDID) {
         require(plans[planId] > 0, "Invalid plan");
         require(msg.value == plans[planId], "Incorrect fee");
-        Subscriber storage user = subscribers[msg.sender];
+        Subscriber storage user = subscribers[userDID];
         require(block.timestamp > user.endTime, "Current subscription must expire before renewal");
 
-        if (user.endTime == 0) { // New subscriber
-            user.startTime = block.timestamp;
-            user.endTime = block.timestamp + subscriptionDuration;
-            user.planId = planId;
-            user.active = true;
-        } else { // Renewing subscription
-            user.endTime += subscriptionDuration; // Renew the subscription from the current time
-        }
-        
-        user.planId = planId; // Update the plan ID for both new and renewing subscribers
+        user.endTime = block.timestamp + subscriptionDuration; // Handles both new and renewing subscriptions
+        user.planId = planId;
         user.active = true;
         
-        emit Subscribed(msg.sender, user.startTime, user.endTime, planId);
+        emit Subscribed(userDID, user.startTime, user.endTime, planId);
     }
 
     function checkSubscription(address user) public view returns (bool isActive) {
         return subscribers[user].endTime > block.timestamp;
     }
 
-    function cancelSubscription() public {
+    function cancelSubscription() public onlyDIDOwner(msg.sender) {
         require(subscribers[msg.sender].active, "No active subscription");
         subscribers[msg.sender].active = false;
         emit SubscriptionCancelled(msg.sender);

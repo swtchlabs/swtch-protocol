@@ -10,7 +10,7 @@ import { ethers } from "hardhat";
 
 describe("SecretsManager", function () {
     let secretsManager: SecretsManager;
-    let didManager: IdentityManager;
+    let identityManager: IdentityManager;
     type SignerType = hre.ethers.SignerWithAddress;
     let owner: SignerType;
     let user1: SignerType;
@@ -23,18 +23,20 @@ describe("SecretsManager", function () {
         [owner, user1, user2, ...addrs] = await hre.ethers.getSigners();
 
         const IdentityManagerFactory = await hre.ethers.getContractFactory("IdentityManager", owner);
-        didManager = await IdentityManagerFactory.deploy();
-        await didManager.getDeployedCode();
-        await didManager.initialize(); 
+        identityManager = await IdentityManagerFactory.deploy();
+        await identityManager.getDeployedCode();
+        await identityManager.initialize(); 
 
         const SecretsManagerFactory = await hre.ethers.getContractFactory("SecretsManager", owner);
-        secretsManager = await SecretsManagerFactory.deploy(SECRET_FEE, await didManager.getAddress());
+        secretsManager = await SecretsManagerFactory.deploy(SECRET_FEE, await identityManager.getAddress());
         await secretsManager.getDeployedCode();
 
         // Register identities for testing
-        await didManager.connect(owner).registerIdentity(await user1.getAddress(), await user1.getAddress(), "doc1");
-        await didManager.connect(owner).registerIdentity(await user2.getAddress(), await user2.getAddress(), "doc2");
-        // await didManager.connect(owner).addDelegate(await user2.getAddress(), await user2.getAddress());
+        await identityManager.connect(owner).registerIdentity(await user1.getAddress(), await user1.getAddress(), "doc1");
+        await identityManager.connect(owner).registerIdentity(await user2.getAddress(), await user2.getAddress(), "doc2");
+        
+        // Register delegate in IdentityManager
+        await identityManager.connect(user1).addDelegate(await user1.getAddress(), await user2.getAddress());
     });
 
     describe("Deployment", function () {
@@ -51,9 +53,6 @@ describe("SecretsManager", function () {
         });
 
         it("Should allow owner to add subspaces", async function () {
-            // await expect()
-            //     .to.emit(secretsManager, 'SubSpaceAdded')
-            //     .withArgs(await user1.getAddress(), await user2.getAddress(), ethers.ZeroAddress); // Mocked address
             let tx = secretsManager.connect(user1).addSubSpace(await user1.getAddress(), await user2.getAddress());
             (await tx).wait;
 
@@ -82,7 +81,6 @@ describe("SecretsManager", function () {
         });
 
         it("Should disable spaces correctly", async function () {
-            // await secretsManager.addSpace(await user1.getAddress());
             await secretsManager.connect(user1).disableSpace(await user1.getAddress());
             const space = await secretsManager.spaces(await user1.getAddress());
             expect(space.enabled).to.be.false;
