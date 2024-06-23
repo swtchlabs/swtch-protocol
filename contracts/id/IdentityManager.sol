@@ -47,6 +47,11 @@ contract IdentityManager is Initializable, OwnableUpgradeable {
         emit IdentityUpdated(did);
     }
 
+    /**
+     * Add a delegate to manage and Identity account.
+     * @param did Registered user did account.
+     * @param delegate Delegate did account. If the Identity for delegate does not exist it will be rejected. Delegates must have registered did.
+     */
     function addDelegate(address did, address delegate) public onlyOwnerOrDelegate(did) {
         identities[did].delegates[delegate] = true;
         emit DelegateUpdated(did, delegate, true);

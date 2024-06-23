@@ -55,7 +55,7 @@ describe("IdentityManager", function () {
 
     describe("Delegate Management", function () {
         beforeEach(async function () {
-            await identityManager.registerIdentity(await addr1.getAddress(), await owner.getAddress(), "docHash");
+            await identityManager.connect(owner).registerIdentity(await addr1.getAddress(), await owner.getAddress(), "docHash");
         });
     
         it("Should allow adding a delegate", async function () {

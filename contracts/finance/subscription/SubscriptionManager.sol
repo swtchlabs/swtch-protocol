@@ -33,8 +33,8 @@ contract SubscriptionManager is RoleBasedAccessControl {
     event PlanAdded(uint256 planId, uint256 price);
     event PlanUpdated(uint256 planId, uint256 newPrice);
 
-    modifier onlyDIDOwner(address user) {
-        require(identityManager.isOwnerOrDelegate(user, msg.sender), "Unauthorized: caller is not the owner or delegate");
+    modifier onlyDIDOwner(address did) {
+        require(identityManager.isOwnerOrDelegate(did, msg.sender), "Unauthorized: caller is not the owner or delegate");
         _;
     }
 
@@ -57,17 +57,17 @@ contract SubscriptionManager is RoleBasedAccessControl {
         emit PlanUpdated(planId, newPrice);
     }
 
-    function subscribe(uint256 planId) public payable onlyDIDOwner(msg.sender) {
+    function subscribe(address userDID, uint256 planId) public payable onlyDIDOwner(userDID) {
         require(plans[planId] > 0, "Invalid plan");
         require(msg.value == plans[planId], "Incorrect fee");
-        Subscriber storage user = subscribers[msg.sender];
+        Subscriber storage user = subscribers[userDID];
         require(block.timestamp > user.endTime, "Current subscription must expire before renewal");
 
         user.endTime = block.timestamp + subscriptionDuration; // Handles both new and renewing subscriptions
         user.planId = planId;
         user.active = true;
         
-        emit Subscribed(msg.sender, user.startTime, user.endTime, planId);
+        emit Subscribed(userDID, user.startTime, user.endTime, planId);
     }
 
     function checkSubscription(address user) public view returns (bool isActive) {
