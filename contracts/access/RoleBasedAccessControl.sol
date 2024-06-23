@@ -46,7 +46,7 @@ contract RoleBasedAccessControl {
      * @dev Modifier to restrict functions to the owner.
      */
     modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner may perform this action");
+        require(msg.sender == owner, "Unauthorized");
         _;
     }
 

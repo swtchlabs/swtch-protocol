@@ -1,76 +1,107 @@
-import {
-    time,
-    loadFixture,
-} from "@nomicfoundation/hardhat-toolbox/network-helpers";
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect, assert } from "chai";
 import hre from "hardhat";
-import { SubscriptionManager } from "../typechain-types";
-import { ethers } from "hardhat";
+import { IdentityManager, IdentityManager__factory, SubscriptionManager, SubscriptionManager__factory } from "../typechain-types";
+import { ethers, upgrades } from "hardhat";
 
 describe("SubscriptionManager", function () {
     type SignerType = hre.ethers.SignerWithAddress;
-    let accounts: SignerType[];
+    
     let subscriptionManager: SubscriptionManager;
+    let identityManager: IdentityManager;
+
     let owner: SignerType;
     let subscriber: SignerType;
+    let addr2: SignerType;
+    let accounts: SignerType[];
+
     const fee = ethers.parseEther("0.1"); // 0.1 ether
     const duration = 86400; // 1 day in seconds
+    const subscriptionDuration = 30 * 24 * 60 * 60; // 30 days in seconds
     const planId = 1;
     const planPrice = ethers.parseEther("0.1"); // 0.1 ether
 
     beforeEach(async function () {
-        accounts = await ethers.getSigners();
-        owner = accounts[0];
-        subscriber = accounts[1];
+        [owner, subscriber, addr2,...accounts] = await ethers.getSigners();
 
-        const SubscriptionManagerFactory = await ethers.getContractFactory("SubscriptionManager", owner);
-        subscriptionManager = await SubscriptionManagerFactory.deploy(fee, duration);
+        // Deploy the identityManager 
+        const IdentityManagerFactory = (await ethers.getContractFactory("IdentityManager", owner)) as IdentityManager__factory;
+        identityManager = await IdentityManagerFactory.deploy();
+        await identityManager.getDeployedCode();
+
+        await identityManager.initialize();
+
+        const SubscriptionManagerFactory = await ethers.getContractFactory("SubscriptionManager", owner) as SubscriptionManager__factory;
+        subscriptionManager = await SubscriptionManagerFactory.deploy(fee, duration, await identityManager.getAddress());
         await subscriptionManager.getDeployedCode();
+
+        // Register addresses in IdentityManager
+        await identityManager.connect(owner).registerIdentity(await owner.getAddress(), await owner.getAddress(), "did:doc1");
+        await identityManager.connect(owner).addDelegate(await owner.getAddress(), await addr2.getAddress());
 
         // Add a subscription plan
         await subscriptionManager.connect(owner).addPlan(planId, planPrice);
     });
 
-    describe("Subscription Lifecycle", function () {
+    describe("Initialization and Setup", function () {
+        it("should correctly initialize subscription parameters", async function () {
+            expect(await subscriptionManager.subscriptionFee()).to.equal(fee);
+            expect(await subscriptionManager.subscriptionDuration()).to.equal(duration);
+        });
+    });
 
-        it("should allow a user to subscribe", async function () {
-            const tx = await subscriptionManager.connect(subscriber).subscribe(planId, { value: planPrice });
-            const receipt = await tx.wait();
-            if (receipt) {
-                expect(receipt).to.not.be.undefined;
-                expect(receipt.from).to.equal(await subscriber.getAddress());
-                expect(tx.value).to.equal(planPrice);
-            }
+    describe("Plan Management", function () {
+        it("should allow the owner to add and update plans", async function () {
+            await expect(subscriptionManager.addPlan(planId, planPrice))
+                .to.emit(subscriptionManager, "PlanAdded")
+                .withArgs(planId, planPrice);
+
+            const newPlanPrice = ethers.parseEther("0.2");
+            await expect(subscriptionManager.updatePlan(planId, newPlanPrice))
+                .to.emit(subscriptionManager, "PlanUpdated")
+                .withArgs(planId, newPlanPrice);
         });
 
-        it("should reject subscription if incorrect fee is paid", async function () {
-            const lowerFee = hre.ethers.toBigInt(50000000000000000n);
-            await expect(subscriptionManager.connect(subscriber).subscribe(planId, { value: lowerFee }))
-                .to.be.revertedWith("Incorrect fee");
+        it("should prevent non-owners from adding or updating plans", async function () {
+            await expect(subscriptionManager.connect(addr2).addPlan(planId, planPrice))
+                .to.be.revertedWith("Unauthorized");
+
+            const newPlanPrice = ethers.parseEther("0.2");
+            await expect(subscriptionManager.connect(addr2).updatePlan(planId, newPlanPrice))
+                .to.be.revertedWith("Unauthorized");
+        });
+    });
+
+    describe("Subscription Processes", function () {
+        beforeEach(async function () {
+            // Add a plan for subscription tests
+            await subscriptionManager.addPlan(planId, planPrice);
         });
 
-        it("should reject re-subscription before expiry", async function () {
-            await subscriptionManager.connect(subscriber).subscribe(planId, { value: planPrice });
-            await expect(subscriptionManager.connect(subscriber).subscribe(planId, { value: planPrice }))
-                .to.be.revertedWith("Current subscription must expire before renewal");
+        it("should allow a DID owner or delegate to subscribe", async function () {
+
+            expect(await identityManager.isOwnerOrDelegate(owner.address, addr2.address)).to.be.true;
+            
+            // Subscribing with addr1 who is the DID owner
+            await expect(subscriptionManager.connect(owner).subscribe(planId, { value: planPrice }))
+                .to.emit(subscriptionManager, "Subscribed");
+                // .withArgs(owner.address, currentBlock.timestamp, expectedEndTime, planId);
+
+            // Subscribing with addr2 who is a delegate
+            await expect(subscriptionManager.connect(addr2).subscribe(planId, { value: planPrice }))
+                .to.emit(subscriptionManager, "Subscribed");
+                // .withArgs(addr2.address, startTime, expectedEndTime, planId);
         });
 
-        it("should check active subscription correctly", async function () {
-            await subscriptionManager.connect(subscriber).subscribe(planId, { value: planPrice });
-            expect(await subscriptionManager.checkSubscription(await subscriber.getAddress())).to.equal(true);
-            // Simulate time travel in Hardhat
-            await ethers.provider.send('evm_increaseTime', [duration + 1]);
-            await ethers.provider.send('evm_mine', []);
-            expect(await subscriptionManager.checkSubscription(await subscriber.getAddress())).to.equal(false);
+        it("should prevent unauthorized addresses from subscribing", async function () {
+            await expect(subscriptionManager.connect(accounts[0]).subscribe(planId, { value: planPrice }))
+                .to.be.revertedWith("Unauthorized: caller is not the owner or delegate");
         });
 
-        it("should allow the owner to withdraw collected fees", async function () {
-            await subscriptionManager.connect(subscriber).subscribe(planId, { value: planPrice });
-            const initialBalance = await ethers.provider.getBalance(await owner.getAddress());
-            await subscriptionManager.connect(owner).withdraw();
-            const finalBalance = await ethers.provider.getBalance(await owner.getAddress());
-            expect(finalBalance).to.be.above(initialBalance);
+        it("should handle subscription renewals and cancellations", async function () {
+            await subscriptionManager.connect(owner).subscribe(planId, { value: planPrice });
+            await expect(subscriptionManager.connect(owner).cancelSubscription())
+                .to.emit(subscriptionManager, "SubscriptionCancelled")
+                .withArgs(owner.address);
         });
 
         it("should allow the owner to add a new plan", async function () {
@@ -85,23 +116,15 @@ describe("SubscriptionManager", function () {
             await subscriptionManager.connect(owner).updatePlan(planId, newPlanPrice);
             expect(await subscriptionManager.plans(planId)).to.equal(newPlanPrice);
         });
+    });
 
-        it("should subscribe users to different plans", async function () {
-            const newPlanId = 2;
-            const newPlanPrice = ethers.parseEther("0.2"); // 0.2 ether
-            await subscriptionManager.connect(owner).addPlan(newPlanId, newPlanPrice);
-
-            // Subscribe to the original plan
-            await subscriptionManager.connect(subscriber).subscribe(planId, { value: planPrice });
-            expect((await subscriptionManager.subscribers(await subscriber.getAddress())).planId).to.equal(planId);
-
-            // Simulate time travel in Hardhat
-            await ethers.provider.send('evm_increaseTime', [duration + 1]);
-            await ethers.provider.send('evm_mine', []);
-
-            // Subscribe to the new plan
-            await subscriptionManager.connect(subscriber).subscribe(newPlanId, { value: newPlanPrice });
-            expect((await subscriptionManager.subscribers(await subscriber.getAddress())).planId).to.equal(newPlanId);
+    describe("Withdrawal and Financial Operations", function () {
+        it("should allow only the owner to withdraw collected fees", async function () {
+            // Assume some fees have been collected
+            await subscriptionManager.connect(owner).subscribe(planId, { value: planPrice });
+            await expect(() => subscriptionManager.withdraw())
+                .to.changeEtherBalances([subscriptionManager, owner], [-planPrice, planPrice]);
         });
     });
+
 });

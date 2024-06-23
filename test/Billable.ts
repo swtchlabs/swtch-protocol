@@ -34,7 +34,7 @@ describe("Billable", function () {
     });
 
     it("Should fail if non-owner tries to adjust the fee", async function () {
-      await expect(billable.connect(addr1).adjustFees(300)).to.be.revertedWith("Only owner may perform this action");
+      await expect(billable.connect(addr1).adjustFees(300)).to.be.revertedWith("Unauthorized");
     });
 
     it("Should revert if the adjusted fee is zero", async function () {
@@ -59,7 +59,7 @@ describe("Billable", function () {
     });
 
     it("Should fail if non-owner tries to withdraw", async function () {
-      await expect(billable.connect(addr1).withdraw(addr1.address)).to.be.revertedWith("Only owner may perform this action");
+      await expect(billable.connect(addr1).withdraw(addr1.address)).to.be.revertedWith("Unauthorized");
     });
   });
 });
