@@ -60,7 +60,7 @@ contract ProofOfContribution is OwnableUpgradeable {
     }
 
     function addContributor(address contributor) public onlyOwner {
-        require(identityManager.isOwnerOrDelegate(contributor, contributor), "Sender is not a registered DID");
+        require(identityManager.isOwnerOrDelegate(contributor, contributor), "Contributor is not a registered DID");
         allowedContributors[contributor] = true;
         emit ContributorAdded(contributor);
     }
@@ -88,6 +88,7 @@ contract ProofOfContribution is OwnableUpgradeable {
         address contributor,
         bytes memory signature
     ) public onlyAllowedContributors {
+        require(identityManager.isOwnerOrDelegate(contributor, contributor), "Contributor is not a registered DID");
         require(contributionTypes[contributionTypeId].rewardRate > 0, "Invalid contribution type");
         require(verifySignature(contentHash, contributor, contributionTypeId, signature), "Invalid signature");
 

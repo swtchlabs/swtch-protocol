@@ -1,12 +1,13 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { solidityPackedKeccak256, toBigInt } from "ethers";
-import { ProofOfContribution, SWTCH } from "../typechain-types";
+import { IdentityManager, ProofOfContribution, ProofOfContribution__factory, SWTCH } from "../typechain-types";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("ProofOfContribution", function () {
     let token: SWTCH;
     let contrib: ProofOfContribution;
+    let identityManager: IdentityManager;
     let owner: SignerWithAddress;
     let addr1: SignerWithAddress;
     let addr2: SignerWithAddress;
@@ -20,10 +21,19 @@ describe("ProofOfContribution", function () {
         await token.getDeployedCode();
         await token.initialize(toBigInt(100000000), owner.address);
 
-        const ProofOfContributionFactory = await ethers.getContractFactory("ProofOfContribution");
+        const IdentityManager = await ethers.getContractFactory("IdentityManager");
+        identityManager = await IdentityManager.deploy();
+        await identityManager.getDeployedCode();
+        await identityManager.initialize();
+
+        // Registering DIDs
+        await identityManager.registerIdentity(addr1.address, addr1.address, "did:user1DID");
+        await identityManager.registerIdentity(addr2.address, addr2.address, "did:user2DID");
+
+        const ProofOfContributionFactory = await ethers.getContractFactory("ProofOfContribution") as ProofOfContribution__factory;
         contrib = await ProofOfContributionFactory.deploy();
         await contrib.getDeployedCode();
-        await contrib.initialize(await token.getAddress());
+        await contrib.initialize(await token.getAddress(), await identityManager.getAddress());
 
         // Transfer SWTCH tokens to the ProofOfContribution smart contract
         // ProofOfContribution cannot mint tokens, it can only distribute
