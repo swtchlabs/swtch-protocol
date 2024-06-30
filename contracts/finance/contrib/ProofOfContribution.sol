@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
+import "../../id/IdentityManager.sol";
 import "../../token/SWTCH.sol";
 
 /**
@@ -16,6 +17,8 @@ import "../../token/SWTCH.sol";
  */
 contract ProofOfContribution is OwnableUpgradeable {
     
+    IdentityManager private identityManager;
+
     SWTCH public token;
     address public tokenAddress;
     uint256 public nextContributionTypeId = 1;
@@ -49,14 +52,15 @@ contract ProofOfContribution is OwnableUpgradeable {
         _;
     }
 
-    function initialize(address tokenAddress_) public initializer {
+    function initialize(address _tokenAddress, address _identityManagerAddress) public initializer {
         __Ownable_init(msg.sender);
-
-        tokenAddress = tokenAddress_;
+        identityManager = IdentityManager(_identityManagerAddress);
+        tokenAddress = _tokenAddress;
         token = SWTCH(tokenAddress);
     }
 
     function addContributor(address contributor) public onlyOwner {
+        require(identityManager.isOwnerOrDelegate(contributor, contributor), "Sender is not a registered DID");
         allowedContributors[contributor] = true;
         emit ContributorAdded(contributor);
     }
