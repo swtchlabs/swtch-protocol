@@ -6,12 +6,12 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-import "../token/SWTCH.sol";
+import "../../token/SWTCH.sol";
 
 /**
  * @title ProofOfContribution
  * @author astor@swtch.network
- * @notice SWTCH Proof of Contribution contract is a smart contract designed to incentivize and reward contributors for their valuable contributions to a project. 
+ * @notice SWTCH Proof of Contribution contract is a smart contract designed to incentivize and reward contributors for their valuable contributions to a project. Put simply it is a Payroll smart contract. 
  *         This is achieved by leveraging the SWTCH ERC-20 token. The contract ensures secure and verifiable contributions through cryptographic signatures and provides a flexible system for defining different types of contributions and their associated rewards.
  */
 contract ProofOfContribution is OwnableUpgradeable {
