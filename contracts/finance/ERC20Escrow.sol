@@ -10,6 +10,7 @@ interface IERC20 {
 
 /**
  * @title ERC20Escrow
+ * @author astor@swtch.network
  * @notice ERC20Escrow is responsible for managing an escrow exchange using ERC20 tokens.
  */
 contract ERC20Escrow {

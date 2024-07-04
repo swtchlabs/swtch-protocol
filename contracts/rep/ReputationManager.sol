@@ -11,6 +11,7 @@ import "../finance/ERC721Escrow.sol";// IERC721Escrow
 
 /**
  * @title ReputationManager
+ * @author astor@swtch.network
  * @notice SWTCH ReputationManager is responsible for providing a modular and upgradeable reputation system that uses a separate library for core scoring logic. The ReputationSystem integrates with the IdentityManager and various Escrow contracts while using the ReputationScoreLib for score calculations.
  */
 contract ReputationManager is Initializable, OwnableUpgradeable {
