@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 
-import "../../id/IdentityManager.sol";
+import "../../did/IdentityManager.sol";
 
 contract DIDRestrictedERC20 is ERC20, ERC20Burnable {
 

@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
-import "../../id/IdentityManager.sol";
+import "../../did/IdentityManager.sol";
 
 contract DIDRestrictedERC721 is ERC721, ERC721Burnable {
     

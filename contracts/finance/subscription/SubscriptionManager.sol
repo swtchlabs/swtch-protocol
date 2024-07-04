@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3
 pragma solidity ^0.8.24;
 
-import "../../id/IdentityManager.sol";
+import "../../did/IdentityManager.sol";
 import "../../access/RoleBasedAccessControl.sol";
 
 /**

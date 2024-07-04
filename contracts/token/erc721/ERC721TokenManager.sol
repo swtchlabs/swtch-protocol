@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./DIDRestrictedERC721.sol";
-import "../../id/IdentityManager.sol";
+import "../../did/IdentityManager.sol";
 
 contract ERC721TokenManager is OwnableUpgradeable {
     IdentityManager private identityManager;
