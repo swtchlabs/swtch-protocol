@@ -19,10 +19,18 @@ contract IdentityManager is Initializable, OwnableUpgradeable {
         string didDocument; // DID document reference
     }
 
+    struct Attestation {
+        string issuer;
+        string claim;
+        uint256 issuedAt;
+    }
+
     mapping(address => Identity) public identities;
+    mapping(address => Attestation[]) private attestations;
 
     event IdentityUpdated(address indexed did);
     event DelegateUpdated(address indexed did, address delegate, bool enabled);
+    event AttestationAdded(address indexed did, string issuer, string claim, uint256 issuedAt);
 
     modifier onlyOwnerOrDelegate(address did) {
         require(msg.sender == identities[did].owner || identities[did].delegates[msg.sender], "Unauthorized");
@@ -33,7 +41,8 @@ contract IdentityManager is Initializable, OwnableUpgradeable {
         __Ownable_init(msg.sender);
     }
 
-    function registerIdentity(address did, address owner, string memory documentHash) public onlyOwner {
+    // Any user may register an identity
+    function registerIdentity(address did, address owner, string memory documentHash) public {
         require(identities[did].owner == address(0), "Identity already exists");
         Identity storage identity = identities[did];
         identity.owner = owner;
@@ -42,17 +51,19 @@ contract IdentityManager is Initializable, OwnableUpgradeable {
         emit IdentityUpdated(did);
     }
 
+    // Set DID document for an identity
     function setDIDDocument(address did, string memory documentHash) public onlyOwnerOrDelegate(did) {
         identities[did].didDocument = documentHash;
         emit IdentityUpdated(did);
     }
 
     /**
-     * Add a delegate to manage and Identity account.
-     * @param did Registered user did account.
-     * @param delegate Delegate did account. If the Identity for delegate does not exist it will be rejected. Delegates must have registered did.
+     * Add a delegate to manage an Identity account.
+     * @param did Registered user DID account.
+     * @param delegate Delegate DID account. If the Identity for delegate does not exist it will be rejected. Delegates must have registered DID.
      */
     function addDelegate(address did, address delegate) public onlyOwnerOrDelegate(did) {
+        require(identities[delegate].owner != address(0), "Delegate identity does not exist");
         identities[did].delegates[delegate] = true;
         emit DelegateUpdated(did, delegate, true);
     }
@@ -68,4 +79,37 @@ contract IdentityManager is Initializable, OwnableUpgradeable {
         return user == identity.owner || identity.delegates[user];
     }
 
+    // Add attestation ensuring the DID is already registered
+    function addAttestation(address did, string memory issuer, string memory claim) public {
+        require(identities[did].owner != address(0), "Identity does not exist");
+
+        Attestation memory attestation = Attestation({
+            issuer: issuer,
+            claim: claim,
+            issuedAt: block.timestamp
+        });
+
+        attestations[did].push(attestation);
+
+        emit AttestationAdded(did, issuer, claim, block.timestamp);
+    }
+
+    function getAttestations(address did) public view returns (Attestation[] memory) {
+        return attestations[did];
+    }
+
+    function verifyAttestation(address did, string memory issuer, string memory claim) public view returns (bool) {
+        Attestation[] memory attests = attestations[did];
+
+        for (uint256 i = 0; i < attests.length; i++) {
+            if (
+                keccak256(abi.encodePacked(attests[i].issuer)) == keccak256(abi.encodePacked(issuer)) &&
+                keccak256(abi.encodePacked(attests[i].claim)) == keccak256(abi.encodePacked(claim))
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
