@@ -11,7 +11,6 @@ import "../finance/ERC721Escrow.sol";// IERC721Escrow
 
 /**
  * @title ReputationManager
- * @author astor@swtch.network
  * @notice SWTCH ReputationManager is responsible for providing a modular and upgradeable reputation system that uses a separate library for core scoring logic. The ReputationSystem integrates with the IdentityManager and various Escrow contracts while using the ReputationScoreLib for score calculations.
  */
 contract ReputationManager is Initializable, OwnableUpgradeable {
@@ -100,6 +99,21 @@ contract ReputationManager is Initializable, OwnableUpgradeable {
 
     function refundEscrow() external onlyOwner {
         ethEscrow.refundToDepositor();
+    }
+
+    // ERC20 Escrow integration
+    function initiateERC20Escrow(uint256 amount) external {
+        IERC20 token = IERC20(erc20Escrow.token());
+        require(token.transferFrom(msg.sender, address(erc20Escrow), amount), "Transfer failed");
+        erc20Escrow.deposit(amount);
+    }
+
+    function releaseERC20Escrow() external onlyOwner {
+        erc20Escrow.releaseToBeneficiary();
+    }
+
+    function refundERC20Escrow() external onlyOwner {
+        erc20Escrow.refundToDepositor();
     }
 
     // Administrative functions
