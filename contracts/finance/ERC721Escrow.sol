@@ -7,6 +7,8 @@ interface IERC721 {
     function ownerOf(uint256 tokenId) external view returns (address);
 }
 
+import "hardhat/console.sol";
+
 /**
  * @title ERC721Escrow
  * @author astor@swtch.network
@@ -17,6 +19,8 @@ contract ERC721Escrow {
     address public depositor;
     address public beneficiary;
     address public arbiter;
+    address public reputationManager;
+
     IERC721 public nft;
     uint256 public tokenId;
 
@@ -28,19 +32,29 @@ contract ERC721Escrow {
         arbiter = _arbiter;
     }
 
+    function setReputationManager(address _reputationManager) external {
+        require(msg.sender == depositor, "Only depositor can set ReputationManager");
+        reputationManager = _reputationManager;
+    }
+
     function deposit() external {
-        require(msg.sender == depositor, "Only depositor can deposit the NFT");
-        require(nft.ownerOf(tokenId) == msg.sender, "Depositor must own the NFT");
-        nft.transferFrom(depositor, address(this), tokenId);
+        require(msg.sender == depositor || msg.sender == reputationManager, "Only depositor or ReputationManager can deposit the NFT");
+        address currentOwner = nft.ownerOf(tokenId);
+        require(currentOwner == depositor, "Depositor must own the NFT");
+        nft.transferFrom(currentOwner, address(this), tokenId);
     }
 
     function releaseToBeneficiary() external {
-        require(msg.sender == arbiter, "Only arbiter can release the NFT");
+        require(msg.sender == arbiter || msg.sender == reputationManager, "Only arbiter or ReputationManager can release the NFT");
         nft.transferFrom(address(this), beneficiary, tokenId);
     }
 
     function refundToDepositor() external {
-        require(msg.sender == arbiter, "Only arbiter can refund the NFT");
+        require(msg.sender == arbiter || msg.sender == reputationManager, "Only arbiter or ReputationManager can refund the NFT");
         nft.transferFrom(address(this), depositor, tokenId);
+    }
+
+    function getDepositor() public view returns (address) {
+        return depositor;
     }
 }

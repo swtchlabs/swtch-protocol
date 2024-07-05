@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-import "../id/IdentityManager.sol";
+import "../did/IdentityManager.sol";
 
 /**
  * @title NetworkManager

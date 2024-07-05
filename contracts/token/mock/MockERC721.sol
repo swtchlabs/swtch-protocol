@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3
 pragma solidity ^0.8.24;
 
-// TODO 
-contract MockERC721 {
-    
-    constructor(string memory name, string memory symbol) {}
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-    function mint(address to, uint256 tokenId) public {
-        // _mint(to, tokenId);
+contract MockERC721 is ERC721 {
+    
+    constructor() ERC721("MockNFT", "MNFT") {}
+
+    function mint(address to, uint256 tokenId) external {
+        _mint(to, tokenId);
     }
 }

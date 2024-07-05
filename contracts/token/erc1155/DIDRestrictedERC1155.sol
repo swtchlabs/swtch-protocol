@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-import "../../id/IdentityManager.sol";
+import "../../did/IdentityManager.sol";
 
 contract DIDRestrictedERC1155 is ERC1155, ERC1155Burnable, ReentrancyGuard {
     

@@ -10,6 +10,8 @@ interface IERC20 {
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
 }
 
+import "hardhat/console.sol";
+
 /**
  * @title SimpleERC20
  * @author astor@swtch.network

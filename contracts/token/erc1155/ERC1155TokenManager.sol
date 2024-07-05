@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 import "./DIDRestrictedERC1155.sol";
-import "../../id/IdentityManager.sol";
+import "../../did/IdentityManager.sol";
 
 contract ERC1155TokenManager is OwnableUpgradeable {
 

@@ -17,6 +17,7 @@ contract ERC20Escrow {
     address public depositor;
     address public beneficiary;
     address public arbiter;
+    address public reputationManager;
     IERC20 public token;
     uint256 public depositAmount;
 
@@ -27,19 +28,24 @@ contract ERC20Escrow {
         token = IERC20(_token);
     }
 
+    function setReputationManager(address _reputationManager) external {
+        require(msg.sender == depositor, "Only depositor can set ReputationManager");
+        reputationManager = _reputationManager;
+    }
+
     function deposit(uint256 amount) external {
-        require(msg.sender == depositor, "Only depositor can deposit tokens");
-        require(token.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+        require(msg.sender == reputationManager, "Only ReputationManager can deposit");
+        require(token.balanceOf(address(this)) >= amount, "Insufficient balance in escrow");
         depositAmount = amount;
     }
 
     function releaseToBeneficiary() external {
-        require(msg.sender == arbiter, "Only arbiter can release funds");
+        require(msg.sender == arbiter || msg.sender == reputationManager, "Only arbiter or ReputationManager can release funds");
         require(token.transfer(beneficiary, depositAmount), "Transfer failed");
     }
 
     function refundToDepositor() external {
-        require(msg.sender == arbiter, "Only arbiter can refund funds");
+        require(msg.sender == arbiter || msg.sender == reputationManager, "Only arbiter or ReputationManager can refund funds");
         require(token.transfer(depositor, depositAmount), "Transfer failed");
     }
 
