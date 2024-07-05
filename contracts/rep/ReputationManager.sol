@@ -117,6 +117,19 @@ contract ReputationManager is Initializable, OwnableUpgradeable {
         erc20Escrow.refundToDepositor();
     }
 
+    // ERC721 Escrow integration
+    function initiateERC721Escrow() external {
+        erc721Escrow.deposit();
+    }
+
+    function releaseERC721Escrow() external onlyOwner {
+        erc721Escrow.releaseToBeneficiary();
+    }
+
+    function refundERC721Escrow() external onlyOwner {
+        erc721Escrow.refundToDepositor();
+    }
+
     // Administrative functions
 
     function setIdentityManager(address _newIdentityManager) external onlyOwner {
