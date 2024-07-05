@@ -137,7 +137,7 @@ describe("ReputationManager", function () {
     expect(consumerScore).to.equal(200);
   });
 
-  it("should integrate with escrow contracts", async function () {
+  it("should integrate with Ether escrow contracts", async function () {
 
     // Set the ReputationManager address in the Escrow contract
     await ethEscrow.connect(owner).setReputationManager(await reputationSystem.getAddress());
@@ -159,6 +159,13 @@ describe("ReputationManager", function () {
     expect(await ethEscrow.getBalance()).to.equal(0);
   });
 
+  /**
+   * Setup ensures:
+   * Users only need to approve the ReputationManager to spend their tokens.
+   * The ReputationManager handles the transfer of tokens to the ERC20Escrow contract.
+   * The ERC20Escrow contract only allows the ReputationManager to call its functions.
+   * The original depositor is tracked in the ERC20Escrow contract for refunds.
+   */
   it("should integrate with ERC20 escrow contracts", async function () {
     // Transfer tokens to user1
     await mockToken.connect(owner).transfer(user1.address, DEPOSIT_AMOUNT);
