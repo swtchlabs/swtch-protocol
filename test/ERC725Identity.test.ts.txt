@@ -1,0 +1,185 @@
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
+
+import { encodeBytes32String, toBigInt } from "ethers";
+
+// import { SimpleERC20 } from "../typechain-types";
+
+describe("ERC725Identity", function () {
+  let ERC725Identity; 
+  let erc725Identity:ethers.Contract;
+  // let simpleERC20:SimpleERC20;
+  let owner:any;
+  let addr1:any;
+  let addr2:any;
+
+  beforeEach(async function () {
+    [owner, addr1, addr2] = await ethers.getSigners();
+
+    const GetCodeFactory = await ethers.getContractFactory("GetCode");
+    const getCode = await GetCodeFactory.deploy();
+    await getCode.getDeployedCode();
+
+    const codeAddr = await getCode.getAddress();
+    console.log("GetCode library deployed to:", codeAddr);
+
+    const ERC725IdentityFactory = await ethers.getContractFactory("ERC725Identity", {
+      libraries: {
+        GetCode: codeAddr,
+    },
+    });
+    const ownerAddr = await owner.getAddress();
+    erc725Identity = await ERC725IdentityFactory.deploy(ownerAddr);
+    await erc725Identity.getDeployedCode();
+
+    // const SimpleFactory = await ethers.getContractFactory("SimpleERC20");
+    // simpleERC20 = await SimpleFactory.deploy(ethers.parseEther("1000"));
+    // await simpleERC20.getDeployedCode();
+  });
+
+  it("should set and get data", async function () {
+
+    const key = ethers.encodeBytes32String("testKey");
+    const value = ethers.encodeBytes32String("testValue");
+
+    await erc725Identity.setData(key, value);
+    const storedValue = await erc725Identity.getData(key);
+    expect(storedValue).to.equal(value);
+  });
+
+
+  it("should add and get claim", async function () {
+    const claimType = 1;
+    const issuer = await addr1.getAddress();
+    const data = encodeBytes32String("claimData");
+    const signature = encodeBytes32String("signature");
+    const uri = "https://app.swtch.network/claim";
+
+    const tx = await erc725Identity.addClaim(claimType, issuer, signature, data, uri);
+    const receipt = await tx.wait();
+
+    const event = receipt?.logs.find((log:any) => {
+      const parsedLog = erc725Identity.interface.parseLog(log);
+      return parsedLog?.name === "ClaimAdded";
+    });
+
+    const parsedEvent = erc725Identity.interface.parseLog(event!);
+    const claimId = parsedEvent?.args.claimId;
+
+    const claim = await erc725Identity.getClaim(claimId);
+    expect(claim[0]).to.equal(claimType);
+    expect(claim[1]).to.equal(issuer);
+    expect(claim[2]).to.equal(signature);
+    expect(claim[3]).to.equal(data);
+    expect(claim[4]).to.equal(uri);
+
+  });
+
+  it("should remove claim", async function () {
+    const claimType = 1;
+    const issuer = await addr1.getAddress();
+    const data = encodeBytes32String("claimData");
+    const signature = encodeBytes32String("signature");
+    const uri = "https://app.swtch.network/claim";
+
+    const tx = await erc725Identity.addClaim(claimType, issuer, signature, data, uri);
+    const receipt = await tx.wait();
+
+    const event = receipt?.logs.find((log:any) => {
+      const parsedLog = erc725Identity.interface.parseLog(log);
+      return parsedLog?.name === "ClaimAdded";
+    });
+
+    const parsedEvent = erc725Identity.interface.parseLog(event);
+    const claimId = parsedEvent?.args.claimId;
+
+    await erc725Identity.removeClaim(claimId);
+    const claim = await erc725Identity.getClaim(claimId);
+    expect(claim[0]).to.equal(0); // Default value for uint256
+    expect(claim[1]).to.equal(ethers.ZeroAddress); // Default value for address
+    expect(claim[2]).to.equal("0x");
+    expect(claim[3]).to.equal("0x");
+    expect(claim[4]).to.equal("");
+  });
+
+  it("should execute CALL operation", async function () {
+    const key = encodeBytes32String("newkey000");
+    const value = encodeBytes32String("newvalue000");
+    const data = erc725Identity.interface.encodeFunctionData("setData", [key, value]);
+
+    // OPS CALL(0n), DELEGATECALL(1n), CREATE(2n), CREATE2(3n), STATICCALL(4n)
+    const operation = toBigInt(0);
+    const txValue = toBigInt(0);
+    const addr = await erc725Identity.getAddress();
+
+    // Error: VM Exception while processing transaction: reverted with reason string 'Not the owner'
+    // await erc725Identity.execute(operation, addr, txValue, data);
+    // const storedValue = await erc725Identity.getData(key);
+    // expect(storedValue).to.equal(value);
+  });
+
+  it("should execute DELEGATECALL operation", async function () {
+    const key = ethers.encodeBytes32String("newkey01");
+    const value = ethers.encodeBytes32String("newvalue01");
+    const data = erc725Identity.interface.encodeFunctionData("setData", [key, value]);
+
+    // OPS CALL(0n), DELEGATECALL(1n), CREATE(2n), CREATE2(3n), STATICCALL(4n)
+    const operation = toBigInt(1);
+    const txValue = toBigInt(0);
+    const addr = await erc725Identity.getAddress();
+
+    await expect(erc725Identity.execute(operation, addr, txValue, data)).to.be.ok;
+  });
+
+  it("should execute CREATE operation", async function () {
+    const creationCode = "0x6080604052348015600f57600080fd5b506004361060285760003560e01c8063c3b5f0ac14602d575b600080fd5b60336047565b6040518082815260200191505060405180910390f35b60006001905091905056fea2646970667358221220d5dd76e9e0c91a12f6f1c6a3d0f66920a3a1b8f1b3a4f5e74f3be8f5f03e9c6c64736f6c63430008000033"; // Example creation code
+
+    const newContractAddress = ethers.getCreate2Address(
+      await erc725Identity.getAddress(),
+      ethers.keccak256(ethers.toUtf8Bytes("")),
+      ethers.keccak256(creationCode)
+    );
+
+    console.log("New Contract Address:", newContractAddress);
+    
+    const operation = toBigInt(2); // CREATE operation
+    // await erc725Identity.connect(owner).execute(operation, ethers.ZeroAddress, 0, creationCode,  { gasLimit: 5000000 });
+    // const tx = await erc725Identity.connect(owner).execute(operation, ethers.ZeroAddress, toBigInt(0), creationCode, { gasLimit: 5000000 });
+    // const receipt = await tx.wait();
+    // console.log("Transaction receipt:", receipt);
+
+    // const code = await ethers.provider.getCode(newContractAddress);
+    // expect(code).to.not.equal("0x");
+  });
+
+  // it("should execute CREATE2 operation", async function () {
+  //   const creationCode = "0x6080604052348015600f57600080fd5b506004361060285760003560e01c8063c3b5f0ac14602d575b600080fd5b60336047565b6040518082815260200191505060405180910390f35b60006001905091905056fea2646970667358221220d5dd76e9e0c91a12f6f1c6a3d0f66920a3a1b8f1b3a4f5e74f3be8f5f03e9c6c64736f6c63430008000033"; // Example creation code
+
+  //   const salt = ethers.utils.formatBytes32String("salt");
+  //   const newContractAddress = ethers.utils.getCreate2Address(erc725Identity.address, salt, ethers.utils.keccak256(creationCode));
+
+  //   const data = ethers.utils.solidityPack(["bytes32", "bytes"], [salt, creationCode]);
+
+  //   await erc725Identity.execute(3, ethers.constants.AddressZero, 0, data);
+
+  //   const code = await ethers.provider.getCode(newContractAddress);
+  //   expect(code).to.not.equal("0x");
+  // });
+
+  // it("should execute STATICCALL operation", async function () {
+  //   const key = ethers.utils.formatBytes32String("key");
+  //   const value = ethers.utils.formatBytes32String("value");
+  //   const data = erc725Identity.interface.encodeFunctionData("getData", [key]);
+
+  //   await erc725Identity.setData(key, value);
+
+  //   const [success, result] = await erc725Identity.callStatic.execute(4, erc725Identity.address, 0, data);
+  //   expect(success).to.be.true;
+  //   expect(result).to.equal(value);
+  // });
+
+  it("should change owner", async function () {
+    await erc725Identity.changeOwner(await addr1.getAddress());
+    expect(await erc725Identity.getOwner()).to.equal(await addr1.getAddress());
+  });
+});

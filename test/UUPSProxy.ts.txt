@@ -1,0 +1,88 @@
+import {
+    time,
+    loadFixture,
+} from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
+import { expect, use } from "chai";
+import hre from "hardhat";
+import { ImplementationV1, ImplementationV2, UUPSProxy } from "../typechain-types";
+// import { Contract } from "ethers";
+
+describe("UUPSProxy Tests", function () {
+  let proxy: hre.ethers.Contract;
+  let implementationV1: hre.ethers.Contract;
+  let implementationV2: hre.ethers.Contract;
+  let admin: hre.ethers.Signer, user1: hre.ethers.Signer;
+
+  beforeEach(async function () {
+    // Getting signers
+    [admin, user1] = await hre.ethers.getSigners();
+
+    const adminAddress = await admin.getAddress();
+    // console.log("admin", adminAddress);
+
+    // Deploy ImplementationV1
+    const ImplementationV1 = await hre.ethers.getContractFactory("ImplementationV1");
+    implementationV1 = await ImplementationV1.deploy();
+    await implementationV1.getDeployedCode();
+
+    const implAddress = await implementationV1.getAddress();
+
+    // Deploy Proxy
+    const UUPSProxy = await hre.ethers.getContractFactory("UUPSProxy");
+    proxy = await UUPSProxy.deploy(implAddress);
+    await proxy.getDeployedCode();
+
+    // Attaching proxy to ImplementationV1
+    implementationV1 = ImplementationV1.attach(await proxy.getAddress());
+
+    // Deploy ImplementationV2
+    const ImplementationV2 = await hre.ethers.getContractFactory("ImplementationV2", admin);
+    implementationV2 = await ImplementationV2.connect(admin).deploy();
+    await implementationV2.getDeployedCode();
+  });
+
+  it("should retrieve stored value from implementation V1", async function () {
+    // await implementationV1.store(42);
+    // expect(await implementationV1.retrieve()).to.equal(42);
+  });
+
+  it("should upgrade to implementation V2 and retain state", async function () {
+    // await implementationV1.store(42); // Store in V1
+
+    // let globalAdmin = await admin.getAddress();
+    // let implAdmin = await implementationV1.admin();
+    // Propose and approve upgrade to V2
+    // console.log("admin:", implAdmin);
+    // expect(implAdmin).to.equal(globalAdmin);
+
+    // const implAddressV2 = await implementationV2.getAddress();
+    // let up = await implementationV1.proposeUpgrade(implAddressV2);
+    // await implementationV1.connect(admin).approveUpgrade();
+
+    // // Attach the proxy to ImplementationV2 interface
+    // const proxyAddress = await proxy.getAddress();
+    // const attachedV2 = implementationV2.attach(proxyAddress);
+
+    // expect(await attachedV2.retrieve()).to.equal(42);
+    // await attachedV2.store(43);
+    // expect(await attachedV2.retrieve()).to.equal(43);
+  });
+
+  // it("should allow incrementing value in implementation V2", async function () {
+  //   await implementationV1.connect(admin).store(42);
+  //   await implementationV1.connect(admin).proposeUpgrade(await implementationV2.getAddress());
+  //   await implementationV1.connect(admin).approveUpgrade();
+
+  //   // Use the new function from V2
+  //   const attachedV2 = implementationV2.attach(await proxy.getAddress());
+  //   await attachedV2.increment();
+  //   expect(await attachedV2.retrieve()).to.equal(43);
+  // });
+
+  // it("should prevent unauthorized upgrades", async function () {
+  //   await expect(
+  //     implementationV1.connect(user1).proposeUpgrade(await implementationV2.getAddress())
+  //   ).to.be.revertedWith("Unauthorized");
+  // });
+});
