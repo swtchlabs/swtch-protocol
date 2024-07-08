@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: GPL-3
 pragma solidity ^0.8.24;
 
-import "../access/RoleBasedAccessControl.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "../did/IdentityManager.sol";
 
 /**
  * @title Billable 
  * @author astor@swtch.network
  * @notice SWTCH Protocol Smart Contracts Billable implementation for service fee management.
  */
-contract Billable is RoleBasedAccessControl {
+contract Billable is Initializable, OwnableUpgradeable {
+
+    IdentityManager private identityManager;
 
     /**
      * @dev Billable fee for a service.
@@ -24,14 +28,19 @@ contract Billable is RoleBasedAccessControl {
      */
     event FeesAdjusted(address indexed adjuster, uint256 oldFee, uint256 newFee, uint256 timestamp);
 
+    modifier onlyDIDOwner(address did) {
+        require(identityManager.isOwnerOrDelegate(did, msg.sender), "Only DID owner can perform this action");
+        _;
+    }
+
     /**
-     * @dev Constructor
+     * @dev Initializer
      * @param serviceFee Billable fee setting. 
      */
-    constructor(uint256 serviceFee) 
-      RoleBasedAccessControl() 
-    {
-      _fee = serviceFee;
+    function initialize(uint256 serviceFee, address _identityManagerAddress) public initializer {
+        __Ownable_init(msg.sender);
+        _fee = serviceFee;
+        identityManager = IdentityManager(_identityManagerAddress);
     }
 
     /**
@@ -45,7 +54,7 @@ contract Billable is RoleBasedAccessControl {
      * @dev Allow service fee adjustment.
      * @param _adjustedFee Adjust the billable fee.
      */
-    function adjustFees(uint256 _adjustedFee) public onlyOwner {
+    function adjustFees(uint256 _adjustedFee) public onlyDIDOwner(msg.sender) {
       require(_adjustedFee > 0, "Fee must be greater than zero");
       // adjust fee 
       uint256 oldFee = _fee;
@@ -57,12 +66,18 @@ contract Billable is RoleBasedAccessControl {
     /**
      * @dev Collect the service fees.
      */
-    function collectFee() public payable {
+    function collectFee() public payable onlyDIDOwner(msg.sender) {
       require(msg.value == _fee, "Fee not met");
       // Handle collected fees, e.g., store, redistribute, etc.
+      // Need implementation
     }
 
-    function withdraw(address payable recipient) public onlyOwner {
+    /**
+     * @dev Recipient DID will receive the balance transfer.
+     * @param recipient DID registered address.
+     */
+    function withdraw(address payable recipient) public onlyDIDOwner(msg.sender) {
+      require(identityManager.isOwnerOrDelegate(recipient, recipient), "");
       uint256 balance = address(this).balance;
       recipient.transfer(balance);
     }

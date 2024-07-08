@@ -4,39 +4,52 @@ import {
 } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect, assert } from "chai";
-import hre from "hardhat";
-import { SimpleERC20, ERC20SubscriptionManager, ERC20SubscriptionManager__factory } from "../typechain-types";
-// import { ethers } from "hardhat";
+import { SimpleERC20, ERC20SubscriptionManager, ERC20SubscriptionManager__factory, IdentityManager, IdentityManager__factory } from "../typechain-types";
+import { ethers } from "hardhat";
 import { Signer } from "ethers";
+import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("ERC20SubscriptionManager", function () {
-    let accounts: Signer[];
+    let accounts: SignerWithAddress[];
     let token: SimpleERC20;
+    let identityManager: IdentityManager;
     let subscriptionManager: ERC20SubscriptionManager;
     let subscriptionManagerAddress:string;
-    let owner: Signer;
-    let subscriber: Signer;
-    const fee = hre.ethers.parseUnits("100", 18); // 100 tokens
+
+    let owner: SignerWithAddress;
+    let subscriber: SignerWithAddress;
+
+    const fee = ethers.parseUnits("100", 18); // 100 tokens
     const duration = 86400; // 1 day in seconds
-    const doubleFee = hre.ethers.toBigInt(fee) + hre.ethers.toBigInt(fee);
+    const doubleFee = ethers.toBigInt(fee) + ethers.toBigInt(fee);
 
     beforeEach(async function () {
-        accounts = await hre.ethers.getSigners();
-        owner = accounts[0];
-        subscriber = accounts[1];
-
-        const Token = await hre.ethers.getContractFactory("SimpleERC20", owner);
-        token = await Token.deploy(hre.ethers.parseUnits("100000000", 18));
+        [owner, subscriber,...accounts] = await ethers.getSigners();
+        
+        const Token = await ethers.getContractFactory("SimpleERC20", owner);
+        token = await Token.deploy(ethers.parseUnits("100000000", 18));
         await token.getDeployedCode();
 
-        const ERC20SubscriptionManagerFactory = await hre.ethers.getContractFactory("ERC20SubscriptionManager", owner);
+        // Deploy the identityManager 
+        const IdentityManagerFactory = (await ethers.getContractFactory("IdentityManager", owner)) as IdentityManager__factory;
+        identityManager = await IdentityManagerFactory.deploy();
+        await identityManager.getDeployedCode();
+        // Initialize IdentityManager
+        await identityManager.initialize();
+
+        // Register addresses in IdentityManager
+        await identityManager.connect(owner).registerIdentity(await owner.getAddress(), await owner.getAddress(), "did:doc1");
+        await identityManager.connect(owner).registerIdentity(await subscriber.getAddress(), await subscriber.getAddress(), "did:doc2");
+
+        const ERC20SubscriptionManagerFactory = await ethers.getContractFactory("ERC20SubscriptionManager", owner) as ERC20SubscriptionManager__factory;
         const tokenAddress = await token.getAddress();
         
-        subscriptionManager = await ERC20SubscriptionManagerFactory.deploy(tokenAddress, fee, duration); //) as ERC20SubscriptionManager;
+        subscriptionManager = await ERC20SubscriptionManagerFactory.deploy();
         await subscriptionManager.getDeployedCode();
+        await subscriptionManager.initialize(tokenAddress, fee, duration, await identityManager.getAddress());
 
         // Transfer tokens to subscriber
-        await token.transfer(await subscriber.getAddress(), hre.ethers.parseUnits("10000", 18));
+        await token.transfer(await subscriber.getAddress(), ethers.parseUnits("10000", 18));
 
         // Approve SubscriptionManager to spend subscriber's tokens
         subscriptionManagerAddress = await subscriptionManager.getAddress();
@@ -44,12 +57,7 @@ describe("ERC20SubscriptionManager", function () {
     });
 
     describe("ERC20Subscription Lifecycle", function () {
-        it("should allow a user to subscribe with tokens", async function () {
-            const subBalance = await token.balanceOf(await subscriber.getAddress());
-            // console.log(`Subscriber Balance: ${hre.ethers.formatUnits(subBalance, 18)}`);
-            const subAllowance = await token.allowance(await subscriber.getAddress(), subscriptionManagerAddress);
-            // console.log(`Subscriber Allowance: ${hre.ethers.formatUnits(subAllowance, 18)}`);
-            
+        it("should allow a user to subscribe with tokens", async function () {            
             await expect(subscriptionManager.connect(subscriber).subscribe())
                 .to.emit(subscriptionManager, 'Subscribed')
                 .withArgs(await subscriber.getAddress(), anyValue, anyValue);
@@ -58,8 +66,8 @@ describe("ERC20SubscriptionManager", function () {
                 
                 expect(details.startTime).to.be.a('BigInt');
                 expect(details.endTime).to.be.a('BigInt');
-                let et = hre.ethers.toBigInt(details.endTime);
-                let st = hre.ethers.toBigInt(details.startTime);
+                let et = ethers.toBigInt(details.endTime);
+                let st = ethers.toBigInt(details.startTime);
                 let val = et-st; // endtime - starttime
                 expect(val).to.equal(duration);
         });
@@ -75,8 +83,8 @@ describe("ERC20SubscriptionManager", function () {
             await subscriptionManager.connect(subscriber).subscribe();
             expect(await subscriptionManager.checkSubscription(await subscriber.getAddress())).to.equal(true);
             // Simulate time travel in Hardhat
-            await hre.ethers.provider.send('evm_increaseTime', [duration + 1]);
-            await hre.ethers.provider.send('evm_mine', []);
+            await ethers.provider.send('evm_increaseTime', [duration + 1]);
+            await ethers.provider.send('evm_mine', []);
             expect(await subscriptionManager.checkSubscription(await subscriber.getAddress())).to.equal(false);
         });
 
@@ -108,15 +116,15 @@ describe("ERC20SubscriptionManager", function () {
             await token.connect(subscriber).approve(subscriptionManagerAddress, fee);
         
             // Simulate nearing the end of the subscription but not past it
-            await hre.ethers.provider.send('evm_increaseTime', [duration - 1]); // 10 seconds before the subscription ends
-            await hre.ethers.provider.send('evm_mine', []);
+            await ethers.provider.send('evm_increaseTime', [duration - 1]); // 10 seconds before the subscription ends
+            await ethers.provider.send('evm_mine', []);
         
             // Renew the subscription
             await subscriptionManager.connect(subscriber).subscribe();
             const renewedDetails = await subscriptionManager.subscribers(await subscriber.getAddress());
         
             // Calculate the expected end time
-            const expectedEndTime = hre.ethers.toBigInt(initialEndTime) + hre.ethers.toBigInt(duration); // Expecting it to add duration to the initial end time
+            const expectedEndTime = ethers.toBigInt(initialEndTime) + ethers.toBigInt(duration); // Expecting it to add duration to the initial end time
             expect(renewedDetails.endTime).to.be.closeTo(expectedEndTime, 5); // Allowing a small leeway for block timestamp
         });
         
@@ -126,20 +134,20 @@ describe("ERC20SubscriptionManager", function () {
             
             for (let i = 1; i <= 3; i++) {
                 await token.connect(subscriber).approve(subscriptionManagerAddress, fee);
-                await hre.ethers.provider.send('evm_increaseTime', [duration - 1]);
-                await hre.ethers.provider.send('evm_mine', []);
+                await ethers.provider.send('evm_increaseTime', [duration - 1]);
+                await ethers.provider.send('evm_mine', []);
                 await subscriptionManager.connect(subscriber).subscribe();
             }
             const finalDetails = await subscriptionManager.subscribers(await subscriber.getAddress());
-            const expectedFinalEndTime = hre.ethers.toBigInt(initialDetails.endTime) + hre.ethers.toBigInt(duration * 3);
+            const expectedFinalEndTime = ethers.toBigInt(initialDetails.endTime) + ethers.toBigInt(duration * 3);
             expect(finalDetails.endTime).to.be.closeTo(expectedFinalEndTime, 5);
         });
 
         it("should prevent renewals after subscription cancellation", async function () {
             await subscriptionManager.connect(subscriber).subscribe();
             await subscriptionManager.connect(subscriber).cancelSubscription();
-            await hre.ethers.provider.send('evm_increaseTime', [duration]);
-            await hre.ethers.provider.send('evm_mine', []);
+            await ethers.provider.send('evm_increaseTime', [duration]);
+            await ethers.provider.send('evm_mine', []);
         
             await expect(subscriptionManager.connect(subscriber).subscribe())
                 .to.be.reverted; // test actual reason
@@ -147,8 +155,8 @@ describe("ERC20SubscriptionManager", function () {
 
         it("should allow renewal exactly at the time of expiry", async function () {
             await subscriptionManager.connect(subscriber).subscribe();
-            await hre.ethers.provider.send('evm_increaseTime', [duration]);
-            await hre.ethers.provider.send('evm_mine', []);
+            await ethers.provider.send('evm_increaseTime', [duration]);
+            await ethers.provider.send('evm_mine', []);
         
             await token.connect(subscriber).approve(subscriptionManagerAddress, fee);
             await expect(subscriptionManager.connect(subscriber).subscribe())
@@ -157,8 +165,8 @@ describe("ERC20SubscriptionManager", function () {
 
         it("should allow renewal just after the time of expiry", async function () {
             await subscriptionManager.connect(subscriber).subscribe();
-            await hre.ethers.provider.send('evm_increaseTime', [duration + 1]);
-            await hre.ethers.provider.send('evm_mine', []);
+            await ethers.provider.send('evm_increaseTime', [duration + 1]);
+            await ethers.provider.send('evm_mine', []);
         
             await token.connect(subscriber).approve(subscriptionManagerAddress, fee);
             await expect(subscriptionManager.connect(subscriber).subscribe())
