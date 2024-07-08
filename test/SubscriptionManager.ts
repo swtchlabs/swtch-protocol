@@ -1,17 +1,17 @@
 import { expect, assert } from "chai";
 import { IdentityManager, IdentityManager__factory, SubscriptionManager, SubscriptionManager__factory } from "../typechain-types";
 import { ethers, upgrades } from "hardhat";
+import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("SubscriptionManager", function () {
-    type SignerType = hre.ethers.SignerWithAddress;
     
     let subscriptionManager: SubscriptionManager;
     let identityManager: IdentityManager;
 
-    let owner: SignerType;
-    let subscriber: SignerType;
-    let addr2: SignerType;
-    let accounts: SignerType[];
+    let owner: SignerWithAddress;
+    let subscriber: SignerWithAddress;
+    let addr2: SignerWithAddress;
+    let accounts: SignerWithAddress[];
 
     const fee = ethers.parseEther("0.1"); // 0.1 ether
     const duration = 86400; // 1 day in seconds
@@ -28,16 +28,17 @@ describe("SubscriptionManager", function () {
         // Initialize IdentityManager
         await identityManager.initialize();
 
-        const SubscriptionManagerFactory = await ethers.getContractFactory("SubscriptionManager", owner) as SubscriptionManager__factory;
-        subscriptionManager = await SubscriptionManagerFactory.deploy(fee, duration, await identityManager.getAddress());
-        await subscriptionManager.getDeployedCode();
-
         // Register addresses in IdentityManager
         await identityManager.connect(owner).registerIdentity(await owner.getAddress(), await owner.getAddress(), "did:doc1");
         await identityManager.connect(owner).registerIdentity(await addr2.getAddress(), await addr2.getAddress(), "did:doc2");
         
         // Register delegate in IdentityManager
         await identityManager.connect(owner).addDelegate(await owner.getAddress(), await addr2.getAddress());
+
+        const SubscriptionManagerFactory = await ethers.getContractFactory("SubscriptionManager", owner) as SubscriptionManager__factory;
+        subscriptionManager = await SubscriptionManagerFactory.deploy();
+        await subscriptionManager.getDeployedCode();
+        await subscriptionManager.initialize(fee, duration, await identityManager.getAddress());
     });
 
     describe("Initialization and Setup", function () {
@@ -61,11 +62,11 @@ describe("SubscriptionManager", function () {
 
         it("should prevent non-owners from adding or updating plans", async function () {
             await expect(subscriptionManager.connect(addr2).addPlan(planId, planPrice))
-                .to.be.revertedWith("Unauthorized");
+                .to.be.revertedWithCustomError;
 
             const newPlanPrice = ethers.parseEther("0.2");
             await expect(subscriptionManager.connect(addr2).updatePlan(planId, newPlanPrice))
-                .to.be.revertedWith("Unauthorized");
+                .to.be.revertedWithCustomError;
         });
     });
 
@@ -125,7 +126,7 @@ describe("SubscriptionManager", function () {
         it("should allow only the owner to withdraw collected fees", async function () {
             // Assume some fees have been collected
             await subscriptionManager.connect(owner).subscribe(await owner.getAddress(), planId, { value: planPrice });
-            await expect(() => subscriptionManager.withdraw())
+            await expect(() => subscriptionManager.withdraw(owner.address))
                 .to.changeEtherBalances([subscriptionManager, owner], [-planPrice, planPrice]);
         });
     });

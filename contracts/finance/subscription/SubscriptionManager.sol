@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: GPL-3
 pragma solidity ^0.8.24;
 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "../../did/IdentityManager.sol";
-import "../../access/RoleBasedAccessControl.sol";
 
 /**
  * @title SubscriptionManager
  * @author astor@swtch.network 
  * @notice SubscriptionManager manages native cryptocurrency based subscription fees.
  */
-contract SubscriptionManager is RoleBasedAccessControl {
+contract SubscriptionManager is Initializable, OwnableUpgradeable {
 
     IdentityManager public identityManager;
 
@@ -38,13 +39,12 @@ contract SubscriptionManager is RoleBasedAccessControl {
         _;
     }
 
-    constructor(uint256 _fee, uint256 _duration, address _identityManager) 
-      RoleBasedAccessControl() 
-    {
+    function initialize(uint256 _fee, uint256 _duration, address _identityManagerAddress) public initializer {
+        __Ownable_init(msg.sender);
         subscriptionFee = _fee;
         subscriptionDuration = _duration;
 
-        identityManager = IdentityManager(_identityManager);
+        identityManager = IdentityManager(_identityManagerAddress);
     }
     
     function addPlan(uint256 planId, uint256 price) external onlyOwner {
@@ -88,8 +88,13 @@ contract SubscriptionManager is RoleBasedAccessControl {
         subscriptionDuration = newDuration;
     }
 
-    // Optionally add a withdraw function to handle contract balances
-    function withdraw() public onlyOwner {
-        payable(owner).transfer(address(this).balance);
+    /**
+     * @dev Recipient DID will receive the balance transfer.
+     * @param recipient DID registered address.
+     */
+    function withdraw(address payable recipient) public onlyDIDOwner(msg.sender) {
+      require(identityManager.isOwnerOrDelegate(recipient, recipient), "");
+      uint256 balance = address(this).balance;
+      recipient.transfer(balance);
     }
 }
