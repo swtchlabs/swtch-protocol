@@ -1,73 +1,83 @@
 // SPDX-License-Identifier: GPL-3
 pragma solidity ^0.8.24;
 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import "../did/IdentityManager.sol";
+import "../utils/cryptography/SignatureVerifier.sol";
+
 /**
  * @title PaymentChannel
  * @author astor@swtch.network
  * @notice PaymentChannel represents a basic ether sender/receiver relationship for payments.
  */
-contract PaymentChannel {
+contract PaymentChannel is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, PausableUpgradeable, SignatureVerifier {
+
+    IdentityManager public identityManager;
+
     address payable public sender;
     address payable public receiver;
     uint256 public expiration;
     uint256 public deposit;
 
-    constructor(address payable _receiver, uint256 duration) payable {
-        sender = payable(msg.sender);
+    event ChannelOpened(address indexed sender, address indexed receiver, uint256 deposit, uint256 expiration);
+    event ChannelClosed(address indexed closer, uint256 amount);
+    event ChannelExtended(uint256 newExpiration);
+    event TimeoutClaimed(address indexed claimer, uint256 amount);
+
+    modifier onlyDIDOwner(address did) {
+        require(identityManager.isOwnerOrDelegate(did, msg.sender), "Unauthorized: caller is not the owner or delegate");
+        _;
+    }
+
+    function initialize(address payable _sender, address payable _receiver, uint256 duration, address _identityManager) public payable initializer {
+        __Ownable_init(msg.sender);
+        __ReentrancyGuard_init();
+        __Pausable_init();
+
+        sender = _sender;
         receiver = _receiver;
         expiration = block.timestamp + duration;
         deposit = msg.value;
+        identityManager = IdentityManager(_identityManager);
+
+        emit ChannelOpened(sender, receiver, deposit, expiration);
     }
 
-    function close(uint256 amount, bytes memory signature) external {
+    function close(address did, uint256 amount, bytes memory signature) external nonReentrant whenNotPaused onlyDIDOwner(did) {
         require(msg.sender == receiver, "Only receiver can close the channel");
-        require(isValidSignature(amount, signature), "Invalid signature");
+        require(isValidSignature(sender, amount, signature, address(this)), "Invalid signature");
         require(amount <= deposit, "Amount exceeds deposit");
 
         receiver.transfer(amount);
         if (address(this).balance > 0) {
             sender.transfer(address(this).balance);
         }
+
+        emit ChannelClosed(msg.sender, amount);
     }
 
-    function isValidSignature(uint256 amount, bytes memory signature) internal view returns (bool) {
-        bytes32 message = prefixed(keccak256(abi.encodePacked(this, amount)));
-        return recoverSigner(message, signature) == sender;
-    }
-
-    function extend(uint256 newExpiration) external {
+    function extend(uint256 newExpiration) external whenNotPaused {
         require(msg.sender == sender, "Only sender can extend expiration");
         require(newExpiration > expiration, "New expiration must be later than current expiration");
         expiration = newExpiration;
+        emit ChannelExtended(newExpiration);
     }
 
-    function claimTimeout() external {
+    function claimTimeout() external nonReentrant whenNotPaused {
         require(block.timestamp >= expiration, "Channel not yet expired");
-        sender.transfer(address(this).balance);
+        uint256 amount = address(this).balance;
+        sender.transfer(amount);
+        emit TimeoutClaimed(sender, amount);
     }
 
-    function recoverSigner(bytes32 message, bytes memory sig) internal pure returns (address) {
-        (uint8 v, bytes32 r, bytes32 s) = splitSignature(sig);
-        return ecrecover(message, v, r, s);
+    function pause() external onlyOwner {
+        _pause();
     }
 
-    function splitSignature(bytes memory sig) internal pure returns (uint8, bytes32, bytes32) {
-        require(sig.length == 65, "Invalid signature length");
-
-        bytes32 r;
-        bytes32 s;
-        uint8 v;
-
-        assembly {
-            r := mload(add(sig, 32))
-            s := mload(add(sig, 64))
-            v := byte(0, mload(add(sig, 96)))
-        }
-
-        return (v, r, s);
-    }
-
-    function prefixed(bytes32 hash) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash));
+    function unpause() external onlyOwner {
+        _unpause();
     }
 }
