@@ -5,9 +5,9 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./ReputationScoreLibV1.sol";
 import "../did/IdentityManager.sol";
-import "../finance/Escrow.sol";      // IEscrow
-import "../finance/ERC20Escrow.sol"; // IERC20Escrow
-import "../finance/ERC721Escrow.sol";// IERC721Escrow
+import "../finance/collateral/ReputableEscrow.sol";      // IEscrow
+import "../finance/collateral/ERC20ReputableEscrow.sol"; // IERC20Escrow
+import "../finance/collateral/ERC721ReputableEscrow.sol";// IERC721Escrow
 
 /**
  * @title ReputationManager
@@ -19,9 +19,9 @@ contract ReputationManager is Initializable, OwnableUpgradeable {
     using ReputationScoreLib for ReputationScoreLib.Action;
 
     IdentityManager public identityManager;
-    Escrow public ethEscrow;
-    ERC20Escrow public erc20Escrow;
-    ERC721Escrow public erc721Escrow;
+    ReputableEscrow public ethEscrow;
+    ERC20ReputableEscrow public erc20Escrow;
+    ERC721ReputableEscrow public erc721Escrow;
 
     struct ParticipantScore {
         ReputationScoreLib.Score asConsumer;
@@ -44,9 +44,9 @@ contract ReputationManager is Initializable, OwnableUpgradeable {
     ) public initializer {
         __Ownable_init(msg.sender);
         identityManager = IdentityManager(_identityManagerAddress);
-        ethEscrow = Escrow(_ethEscrow);
-        erc20Escrow = ERC20Escrow(_erc20Escrow);
-        erc721Escrow = ERC721Escrow(_erc721Escrow);
+        ethEscrow = ReputableEscrow(_ethEscrow);
+        erc20Escrow = ERC20ReputableEscrow(_erc20Escrow);
+        erc721Escrow = ERC721ReputableEscrow(_erc721Escrow);
     }
 
     modifier onlyRegisteredDID(address did) {
@@ -137,14 +137,14 @@ contract ReputationManager is Initializable, OwnableUpgradeable {
     }
 
     function setEthEscrow(address _newEthEscrow) external onlyOwner {
-        ethEscrow = Escrow(_newEthEscrow);
+        ethEscrow = ReputableEscrow(_newEthEscrow);
     }
 
     function setERC20Escrow(address _newERC20Escrow) external onlyOwner {
-        erc20Escrow = ERC20Escrow(_newERC20Escrow);
+        erc20Escrow = ERC20ReputableEscrow(_newERC20Escrow);
     }
 
     function setERC721Escrow(address _newERC721Escrow) external onlyOwner {
-        erc721Escrow = ERC721Escrow(_newERC721Escrow);
+        erc721Escrow = ERC721ReputableEscrow(_newERC721Escrow);
     }
 }
