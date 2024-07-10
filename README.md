@@ -5,6 +5,56 @@ The SWTCH Protocol aims to create a robust infrastructure that integrates variou
 
 SWTCH Protocol is a means to allow developers to monetize APIs and Web Services using minimal blockchain knowledge to implement a pay-per-use or subscription to help you accept and receive crypto.
 
+## Protocol Architecture
+```md
+                 +------------------+    +--------------------+
+                 | IdentityManager  |    | ReputationManager  |
+                 +------------------+    +--------------------+
+                           |                       |
+                           |                       |
+                           v                       v
+                 +----------------------------------+
+                 |        Protocol Core             |
+                 |        (Governance)              |
+                 |                                  |
+                 | +----------+  +--------------+   |
+                 | |Proposals |  |    Voting    |   |
+                 | +----------+  +--------------+   |
+                 |                                  |
+                 | +----------+  +--------------+   |
+                 | |Activation|  |Deactivation  |   |
+                 | +----------+  +--------------+   |
+                 |                                  |
+                 +----------------------------------+
+                               |
+                               |
+                               v
+                 +----------------------------------+
+                 |           Contexts               |
+                 |                                  |
+                 |  +--------+    +--------------+  |
+                 |  |Identity|    |  Reputation  |  |
+                 |  +--------+    +--------------+  |
+                 |                                  |
+                 |  +--------+    +--------------+  |
+                 |  |Networks|    |   Secrets    |  |
+                 |  +--------+    +--------------+  |
+                 |                                  |
+                 |  +--------+                      |
+                 |  | Tokens |                      |
+                 |  +--------+                      |
+                 |                                  |
+                 +----------------------------------+
+```
+
+This diagram illustrates the high-level architecture of the SWTCH Protocol:
+- IdentityManager and ReputationManager sit at the top level, overseeing their respective domains.
+- The Protocol Core functions as the governance layer, managing proposals, voting, and the activation/deactivation of contexts.
+- The Contexts layer includes the key components of the protocol: Identity, Reputation, Networks, Secrets, and Tokens.
+
+The Protocol Core's governance mechanisms allow for community-driven decision-making and evolution of the protocol's functionalities.
+
+
 ## Deployments 
 SWTCH intends to deploy the SWTCH Protocol to multiple blockchains, starting with Arbitrum, Ethereum, Avalache, Polygon and other EVM chains, then Solana and Cosmos.
 
