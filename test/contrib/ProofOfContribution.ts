@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { solidityPackedKeccak256, toBigInt } from "ethers";
-import { IdentityManager, ProofOfContribution, ProofOfContribution__factory, SWTCH } from "../typechain-types";
+import { IdentityManager, ProofOfContribution, ProofOfContribution__factory, SWTCH } from "../../typechain-types";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("ProofOfContribution", function () {

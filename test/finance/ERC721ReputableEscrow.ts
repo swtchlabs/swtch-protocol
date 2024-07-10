@@ -1,21 +1,21 @@
 import { expect } from "chai";
 import { ethers, upgrades } from "hardhat";
-import { MockERC721, ERC721Escrow, ReputationManager } from "../typechain-types";
+import { MockERC721, ReputationManager, ERC721ReputableEscrow } from "../../typechain-types";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("ReputationManager with ERC721Escrow", function () {
   let reputationSystem: ReputationManager;
   let mockNFT: MockERC721;
-  let erc721Escrow: ERC721Escrow;
+  let erc721Escrow: ERC721ReputableEscrow;
   let owner: SignerWithAddress;
-  let user1: SignerWithAddress;
+  let depositor: SignerWithAddress;
   let beneficiary: SignerWithAddress;
   let arbiter: SignerWithAddress;
 
-  const TOKEN_ID = 1;
+  const TOKEN_ID = ethers.toBigInt(1);
 
   beforeEach(async function () {
-    [owner, user1, beneficiary, arbiter] = await ethers.getSigners();
+    [owner, depositor, beneficiary, arbiter] = await ethers.getSigners();
 
     // Deploy mock ERC721 token
     const MockERC721 = await ethers.getContractFactory("MockERC721");
@@ -23,17 +23,21 @@ describe("ReputationManager with ERC721Escrow", function () {
     await mockNFT.getDeployedCode();
 
     // Mint an NFT to user1
-    await mockNFT.connect(owner).mint(user1.address, TOKEN_ID);
+    await mockNFT.connect(owner).mint(depositor.address, TOKEN_ID);
 
     // Deploy ERC721Escrow
-    const ERC721Escrow = await ethers.getContractFactory("ERC721Escrow");
-    erc721Escrow = await ERC721Escrow.connect(user1).deploy(
+    const ERC721Escrow = await ethers.getContractFactory("ERC721ReputableEscrow");
+    erc721Escrow = await ERC721Escrow.connect(depositor).deploy();
+    await erc721Escrow.getDeployedCode();
+    // (address _nft, uint256 _tokenId, address _depositor, address _beneficiary, address _arbiter, address _identityManager)
+    await erc721Escrow.initialize
+    (
       await mockNFT.getAddress(),
       TOKEN_ID,
+      depositor.address,
       beneficiary.address,
       arbiter.address
     );
-    await erc721Escrow.getDeployedCode();
 
     // Deploy ReputationManager
     const ReputationManager = await ethers.getContractFactory("ReputationManager");
@@ -46,15 +50,15 @@ describe("ReputationManager with ERC721Escrow", function () {
     await reputationSystem.getDeployedCode();
 
     // Set ReputationManager in ERC721Escrow
-    await erc721Escrow.connect(user1).setReputationManager(await reputationSystem.getAddress());
+    await erc721Escrow.connect(depositor).setReputationManager(await reputationSystem.getAddress());
   });
 
   it("should integrate with ERC721 escrow contracts", async function () {
     // Approve ERC721Escrow to transfer user1's NFT
-    await mockNFT.connect(user1).approve(await erc721Escrow.getAddress(), TOKEN_ID);
+    await mockNFT.connect(depositor).approve(await erc721Escrow.getAddress(), TOKEN_ID);
 
     // Deposit NFT
-    await reputationSystem.connect(user1).initiateERC721Escrow();
+    await reputationSystem.connect(depositor).initiateERC721Escrow();
 
     expect(await mockNFT.ownerOf(TOKEN_ID)).to.equal(await erc721Escrow.getAddress());
 
@@ -63,12 +67,12 @@ describe("ReputationManager with ERC721Escrow", function () {
     expect(await mockNFT.ownerOf(TOKEN_ID)).to.equal(beneficiary.address);
 
     // Set up for refund test
-    await mockNFT.connect(beneficiary).transferFrom(beneficiary.address, user1.address, TOKEN_ID);
-    await mockNFT.connect(user1).approve(await erc721Escrow.getAddress(), TOKEN_ID);
-    await reputationSystem.connect(user1).initiateERC721Escrow();
+    await mockNFT.connect(beneficiary).transferFrom(beneficiary.address, depositor.address, TOKEN_ID);
+    await mockNFT.connect(depositor).approve(await erc721Escrow.getAddress(), TOKEN_ID);
+    await reputationSystem.connect(depositor).initiateERC721Escrow();
 
     // Refund to depositor
     await reputationSystem.connect(owner).refundERC721Escrow();
-    expect(await mockNFT.ownerOf(TOKEN_ID)).to.equal(user1.address);
+    expect(await mockNFT.ownerOf(TOKEN_ID)).to.equal(depositor.address);
   });
 });
