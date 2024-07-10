@@ -20,6 +20,7 @@ contract ReputableEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUp
     address public beneficiary;
     address public arbiter;
     address public reputationManager;
+    
     IdentityManager public identityManager;
 
     event Deposited(address indexed sender, uint256 amount);
