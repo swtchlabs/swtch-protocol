@@ -4,7 +4,6 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import "../../did/IdentityManager.sol";
 
 /**
  * @title ReputableEscrow
@@ -20,33 +19,24 @@ contract ReputableEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUp
     address public beneficiary;
     address public arbiter;
     address public reputationManager;
-    
-    IdentityManager public identityManager;
 
     event Deposited(address indexed sender, uint256 amount);
     event Released(address indexed recipient, uint256 amount);
     event Refunded(address indexed recipient, uint256 amount);
-
-    modifier onlyDIDOwner(address did) {
-        require(identityManager.isOwnerOrDelegate(did, msg.sender), "Unauthorized: caller is not the owner or delegate");
-        _;
-    }
 
     /**
      * @dev Initializes the escrow contract with the main participants and required addresses.
      * @param _depositor The address of the party depositing funds into escrow.
      * @param _beneficiary The address of the party receiving funds if the escrow is successfully completed.
      * @param _arbiter The address of the party authorized to release or refund the escrowed funds.
-     * @param _identityManager The address of the IdentityManager contract for access control.
      */
-    function initialize(address _depositor, address _beneficiary, address _arbiter, address _identityManager) public initializer {
+    function initialize(address _depositor, address _beneficiary, address _arbiter) public initializer {
         __Ownable_init(msg.sender);
         __ReentrancyGuard_init();
 
         depositor = _depositor;
         beneficiary = _beneficiary;
         arbiter = _arbiter;
-        identityManager = IdentityManager(_identityManager);
     }
 
     function setReputationManager(address _reputationManager) external onlyOwner {
@@ -59,7 +49,6 @@ contract ReputableEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUp
      * Emits a Deposited event upon successful deposit.
      */
     function deposit() external payable nonReentrant {
-        require(identityManager.isOwnerOrDelegate(depositor, depositor), "Depositor is not registered with IdentityManager.");
         require(msg.sender == depositor || msg.sender == reputationManager, "Sender must be the depositor or ReputationManager");
         emit Deposited(msg.sender, msg.value);
     }
@@ -70,7 +59,6 @@ contract ReputableEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUp
      * Emits a Released event upon successful fund release.
      */
     function releaseToBeneficiary() external nonReentrant {
-        require(identityManager.isOwnerOrDelegate(arbiter, arbiter), "Arbiter is not registered with IdentityManager.");
         require(msg.sender == arbiter || msg.sender == reputationManager, "Only arbiter or ReputationManager can release funds");
         uint256 amount = address(this).balance;
         payable(beneficiary).transfer(amount);
@@ -83,7 +71,6 @@ contract ReputableEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUp
      * Emits a Refunded event upon successful refund.
      */
     function refundToDepositor() external nonReentrant {
-        require(identityManager.isOwnerOrDelegate(arbiter, arbiter), "Arbiter is not registered with IdentityManager.");
         require(msg.sender == arbiter || msg.sender == reputationManager, "Only arbiter or ReputationManager can refund funds");
         uint256 amount = address(this).balance;
         payable(depositor).transfer(amount);

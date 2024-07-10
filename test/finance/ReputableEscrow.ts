@@ -56,8 +56,7 @@ describe("ReputableEscrow", function () {
     await reputableEscrow.initialize(
       await depositor.getAddress(),
       await beneficiary.getAddress(), 
-      await arbiter.getAddress(), 
-      await identityManager.getAddress()
+      await arbiter.getAddress()
     );
 
     await reputableEscrow.getDeployedCode();
@@ -70,7 +69,6 @@ describe("ReputableEscrow", function () {
       expect(await reputableEscrow.depositor()).to.equal(depositor.address);
       expect(await reputableEscrow.beneficiary()).to.equal(beneficiary.address);
       expect(await reputableEscrow.arbiter()).to.equal(arbiter.address);
-      expect(await reputableEscrow.identityManager()).to.equal(await identityManager.getAddress());
     });
   });
 

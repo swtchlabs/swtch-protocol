@@ -52,7 +52,6 @@ describe("ReputationManager", function () {
       depositor.address,
       beneficiary.address, 
       arbiter.address,
-      identityManagerAddress,
       {from:owner}
     );
 
