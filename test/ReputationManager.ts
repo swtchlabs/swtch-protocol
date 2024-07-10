@@ -140,7 +140,7 @@ describe("ReputationManager", function () {
   it("should integrate with Ether escrow contracts", async function () {
 
     // Set the ReputationManager address in the Escrow contract
-    await ethEscrow.connect(owner).setReputationManager(await reputationSystem.getAddress());
+    // await ethEscrow.connect(owner).setReputationManager(await reputationSystem.getAddress());
 
     const amount = ethers.parseEther("10");
     await reputationSystem.connect(owner).initiateEscrow({value: amount});
