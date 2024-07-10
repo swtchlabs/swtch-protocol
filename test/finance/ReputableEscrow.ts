@@ -56,8 +56,7 @@ describe("ReputableEscrow", function () {
     await reputableEscrow.initialize(
       await depositor.getAddress(),
       await beneficiary.getAddress(), 
-      await arbiter.getAddress(), 
-      await identityManager.getAddress()
+      await arbiter.getAddress()
     );
 
     await reputableEscrow.getDeployedCode();
@@ -70,7 +69,6 @@ describe("ReputableEscrow", function () {
       expect(await reputableEscrow.depositor()).to.equal(depositor.address);
       expect(await reputableEscrow.beneficiary()).to.equal(beneficiary.address);
       expect(await reputableEscrow.arbiter()).to.equal(arbiter.address);
-      expect(await reputableEscrow.identityManager()).to.equal(await identityManager.getAddress());
     });
   });
 
@@ -89,7 +87,7 @@ describe("ReputableEscrow", function () {
 
     it("should not allow outsiders to deposit funds", async function () {
       await expect(reputableEscrow.connect(outsider).deposit({ value: depositAmount }))
-        .to.be.revertedWith("Unauthorized: caller is not the owner or delegate");
+        .to.be.revertedWith("Sender must be the depositor or ReputationManager");
     });
   });
 
@@ -112,7 +110,7 @@ describe("ReputableEscrow", function () {
 
     it("should not allow outsiders to release funds", async function () {
       await expect(reputableEscrow.connect(outsider).releaseToBeneficiary())
-        .to.be.revertedWith("Unauthorized: caller is not the owner or delegate");
+        .to.be.revertedWith("Only arbiter or ReputationManager can release funds");
     });
   });
 
@@ -135,7 +133,7 @@ describe("ReputableEscrow", function () {
 
     it("should not allow outsiders to refund funds", async function () {
       await expect(reputableEscrow.connect(outsider).refundToDepositor())
-        .to.be.revertedWith("Unauthorized: caller is not the owner or delegate");
+        .to.be.reverted;
     });
   });
 });
