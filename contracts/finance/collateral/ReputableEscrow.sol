@@ -58,7 +58,8 @@ contract ReputableEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUp
      * @notice This function can only be called by the registered depositor.
      * Emits a Deposited event upon successful deposit.
      */
-    function deposit() external payable onlyDIDOwner(depositor) nonReentrant {
+    function deposit() external payable nonReentrant {
+        require(identityManager.isOwnerOrDelegate(depositor, depositor), "Depositor is not registered with IdentityManager.");
         require(msg.sender == depositor || msg.sender == reputationManager, "Sender must be the depositor or ReputationManager");
         emit Deposited(msg.sender, msg.value);
     }
@@ -68,7 +69,8 @@ contract ReputableEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUp
      * @notice This function can only be called by the registered arbiter.
      * Emits a Released event upon successful fund release.
      */
-    function releaseToBeneficiary() external onlyDIDOwner(arbiter) nonReentrant {
+    function releaseToBeneficiary() external nonReentrant {
+        require(identityManager.isOwnerOrDelegate(arbiter, arbiter), "Arbiter is not registered with IdentityManager.");
         require(msg.sender == arbiter || msg.sender == reputationManager, "Only arbiter or ReputationManager can release funds");
         uint256 amount = address(this).balance;
         payable(beneficiary).transfer(amount);
@@ -80,7 +82,8 @@ contract ReputableEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUp
      * @notice This function can only be called by the registered arbiter.
      * Emits a Refunded event upon successful refund.
      */
-    function refundToDepositor() external onlyDIDOwner(arbiter) nonReentrant {
+    function refundToDepositor() external nonReentrant {
+        require(identityManager.isOwnerOrDelegate(arbiter, arbiter), "Arbiter is not registered with IdentityManager.");
         require(msg.sender == arbiter || msg.sender == reputationManager, "Only arbiter or ReputationManager can refund funds");
         uint256 amount = address(this).balance;
         payable(depositor).transfer(amount);

@@ -1,19 +1,22 @@
 import { expect } from "chai";
 import { ethers, upgrades } from "hardhat";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
-import { ERC20Escrow, ERC20Escrow__factory, ERC721Escrow, ERC721Escrow__factory, Escrow, Escrow__factory, IdentityManager, IdentityManager__factory, ReputationManager, SWTCH__factory } from "../typechain-types";
+import { ERC20ReputableEscrow, ERC20ReputableEscrow__factory, ERC721Escrow, ERC721Escrow__factory, ERC721ReputableEscrow, ERC721ReputableEscrow__factory, IdentityManager, IdentityManager__factory, ReputableEscrow, ReputableEscrow__factory, ReputationManager, SWTCH__factory } from "../typechain-types";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("ReputationManager", function () {
   let reputationSystem: any;
   let identityManager: IdentityManager;
+
   let mockToken: any;
-  let ethEscrow: Escrow;
-  let erc20Escrow: ERC20Escrow;
-  let erc721Escrow: ERC721Escrow;
+  let ethEscrow: ReputableEscrow;
+  let erc20Escrow: ERC20ReputableEscrow;
+  let erc721Escrow: ERC721ReputableEscrow;
+
   let owner: SignerWithAddress;
   let user1: SignerWithAddress;
   let user2: SignerWithAddress;
+  let depositor: SignerWithAddress;
   let beneficiary: SignerWithAddress;
   let arbiter: SignerWithAddress;
   let unauthorized: SignerWithAddress;
@@ -22,7 +25,7 @@ describe("ReputationManager", function () {
   const DEPOSIT_AMOUNT = ethers.parseUnits("1000", 18);
 
   beforeEach(async function () {
-    [owner, user1, user2, beneficiary, arbiter, unauthorized] = await ethers.getSigners();
+    [owner, user1, user2, depositor, beneficiary, arbiter, unauthorized] = await ethers.getSigners();
 
     // Deploy mock contracts
     const IdentityManager = await ethers.getContractFactory("IdentityManager") as IdentityManager__factory;
@@ -30,14 +33,28 @@ describe("ReputationManager", function () {
     await identityManager.getDeployedCode();
     await identityManager.initialize();
 
+    const identityManagerAddress = await identityManager.getAddress();
+
     // Registering DIDs
     await identityManager.registerIdentity(user1.address, user1.address, "did:user1DID");
     await identityManager.registerIdentity(user2.address, user2.address, "did:user2DID");
+    await identityManager.registerIdentity(owner.address, owner.address, "did:ownerDID");
+    await identityManager.registerIdentity(depositor.address, depositor.address, "did:depositorDID");
     await identityManager.registerIdentity(beneficiary.address, beneficiary.address, "did:beneficiaryDID");
     await identityManager.registerIdentity(arbiter.address, arbiter.address, "did:arbiterDID");
 
-    const Escrow = await ethers.getContractFactory("Escrow") as Escrow__factory;
-    ethEscrow = await Escrow.deploy(beneficiary.address, arbiter.address);
+    await identityManager.connect(depositor).addDelegate(depositor.address, owner.address);
+
+    const Escrow = await ethers.getContractFactory("ReputableEscrow") as ReputableEscrow__factory;
+    ethEscrow = await Escrow.deploy() as ReputableEscrow;
+    await ethEscrow.getDeployedCode();
+    await ethEscrow.initialize(
+      depositor.address,
+      beneficiary.address, 
+      arbiter.address,
+      identityManagerAddress,
+      {from:owner}
+    );
 
     // Deploy ERC20 and provide for the ERC20 Escrow
     const Token = await ethers.getContractFactory("SimpleERC20", owner);
@@ -46,15 +63,29 @@ describe("ReputationManager", function () {
     const erc20TokenAddress = await mockToken.getAddress();
 
     // Deploy ERC20 and provide for the ERC20 Escrow
-    const ERC20Escrow = await ethers.getContractFactory("ERC20Escrow") as ERC20Escrow__factory;
-    erc20Escrow = await ERC20Escrow.deploy(erc20TokenAddress, beneficiary.address, arbiter.address) as ERC20Escrow;
+    const ERC20Escrow = await ethers.getContractFactory("ERC20ReputableEscrow") as ERC20ReputableEscrow__factory;
+    erc20Escrow = await ERC20Escrow.deploy() as ERC20ReputableEscrow;
     await erc20Escrow.getDeployedCode();
+    await erc20Escrow.initialize(
+      erc20TokenAddress, 
+      depositor.address,
+      beneficiary.address,
+      arbiter.address
+    );
     
     // Deploy ERC721 
     const nft = ethers.ZeroAddress;
     const tokenId = ethers.toBigInt(1); 
-    const ERC721Escrow = await ethers.getContractFactory("ERC721Escrow") as ERC721Escrow__factory;
-    erc721Escrow = await ERC721Escrow.deploy(nft, tokenId, beneficiary.address, arbiter.address);
+    const ERC721Escrow = await ethers.getContractFactory("ERC721ReputableEscrow") as ERC721ReputableEscrow__factory;
+    erc721Escrow = await ERC721Escrow.deploy() as ERC721ReputableEscrow;
+    await erc721Escrow.getDeployedCode();
+    await erc721Escrow.initialize(
+      nft,
+      tokenId,
+      depositor.address,
+      beneficiary.address,
+      arbiter.address
+    );
 
     // Deploy ReputationManager
     const ReputationManager = await ethers.getContractFactory("ReputationManager");
@@ -68,9 +99,11 @@ describe("ReputationManager", function () {
     await reputationSystem.getDeployedCode();
 
     // Set ReputationManager in ERC20Escrow
-    await erc20Escrow.connect(owner).setReputationManager(await reputationSystem.getAddress());
+    await erc20Escrow.connect(depositor).setReputationManager(await reputationSystem.getAddress());
 
     // Transfer some tokens to user1 for testing
+    await mockToken.connect(owner).transfer(await owner.getAddress(), DEPOSIT_AMOUNT);
+    await mockToken.connect(owner).transfer(await depositor.getAddress(), DEPOSIT_AMOUNT);
     await mockToken.connect(owner).transfer(await user1.getAddress(), DEPOSIT_AMOUNT);
     await mockToken.connect(owner).transfer(await reputationSystem.getAddress(), DEPOSIT_AMOUNT);
     
@@ -140,10 +173,10 @@ describe("ReputationManager", function () {
   it("should integrate with Ether escrow contracts", async function () {
 
     // Set the ReputationManager address in the Escrow contract
-    // await ethEscrow.connect(owner).setReputationManager(await reputationSystem.getAddress());
+    await ethEscrow.connect(owner).setReputationManager(await reputationSystem.getAddress());
 
     const amount = ethers.parseEther("10");
-    await reputationSystem.connect(owner).initiateEscrow({value: amount});
+    await reputationSystem.connect(depositor).initiateEscrow({value: amount});
 
     expect(await ethEscrow.getBalance()).to.equal(amount);
 
