@@ -40,9 +40,9 @@ SWTCH Protocol is a means to allow developers to monetize APIs and Web Services 
                  |  |Networks|    |   Secrets    |  |
                  |  +--------+    +--------------+  |
                  |                                  |
-                 |  +--------+                      |
-                 |  | Tokens |                      |
-                 |  +--------+                      |
+                 |  +--------+    +--------------+  |
+                 |  | Tokens |    |   Finance    |  |
+                 |  +--------+    +--------------+  |
                  |                                  |
                  +----------------------------------+
 ```
